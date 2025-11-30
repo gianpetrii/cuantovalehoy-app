@@ -1,0 +1,437 @@
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { MetricCard } from "@/components/ui/metric-card";
+import { CompoundInterestChart } from "@/components/charts/compound-interest-chart";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import {
+  calculateInflationAdjustment,
+  getAvailableDates,
+  formatCurrency,
+} from "@/lib/services/inflation-service";
+import { Currency } from "@/types/inflation";
+import { TrendingUp, DollarSign, Calculator, Percent, Calendar, PiggyBank } from "lucide-react";
+
+interface CompoundInterestResult {
+  initialCapital: number;
+  finalCapital: number;
+  totalInterest: number;
+  totalAmount: number;
+  periods: number;
+  annualRate: number;
+  currency: Currency;
+  chartData: Array<{
+    period: number;
+    capital: number;
+    interest: number;
+    total: number;
+  }>;
+  // Inflation comparison
+  inflationAdjustedAmount?: number;
+  realGain?: number;
+  beatsInflation?: boolean;
+}
+
+export function CompoundInterestCalculator() {
+  const [currency, setCurrency] = useState<Currency>("ARS");
+  const [initialCapital, setInitialCapital] = useState<string>("");
+  const [annualRate, setAnnualRate] = useState<string>("");
+  const [years, setYears] = useState<string>("5");
+  const [frequency, setFrequency] = useState<"monthly" | "annual">("monthly");
+  const [compareInflation, setCompareInflation] = useState<boolean>(true);
+  const [startDate, setStartDate] = useState<string>("");
+  const [result, setResult] = useState<CompoundInterestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const availableDates = getAvailableDates(currency);
+
+  const calculateCompoundInterest = () => {
+    try {
+      setError(null);
+
+      if (!initialCapital || !annualRate || !years) {
+        setError("Por favor completa todos los campos");
+        return;
+      }
+
+      const capital = parseFloat(initialCapital);
+      const rate = parseFloat(annualRate);
+      const numYears = parseFloat(years);
+
+      if (isNaN(capital) || capital <= 0) {
+        setError("Por favor ingresa un capital inicial válido");
+        return;
+      }
+
+      if (isNaN(rate) || rate <= 0) {
+        setError("Por favor ingresa una tasa de interés válida");
+        return;
+      }
+
+      if (isNaN(numYears) || numYears <= 0 || numYears > 50) {
+        setError("Por favor ingresa un período entre 1 y 50 años");
+        return;
+      }
+
+      // Calculate compound interest
+      const periodsPerYear = frequency === "monthly" ? 12 : 1;
+      const totalPeriods = Math.floor(numYears * periodsPerYear);
+      const ratePerPeriod = rate / 100 / periodsPerYear;
+
+      // Generate data for each period
+      const chartData = [];
+      let currentCapital = capital;
+
+      for (let i = 0; i <= totalPeriods; i++) {
+        const totalAmount = capital * Math.pow(1 + ratePerPeriod, i);
+        const interestEarned = totalAmount - capital;
+
+        chartData.push({
+          period: frequency === "monthly" ? i : i / periodsPerYear,
+          capital: capital,
+          interest: interestEarned,
+          total: totalAmount,
+        });
+      }
+
+      const finalAmount = capital * Math.pow(1 + ratePerPeriod, totalPeriods);
+      const totalInterest = finalAmount - capital;
+
+      // Compare with inflation if requested
+      let inflationData = undefined;
+      if (compareInflation && startDate) {
+        try {
+          // Calculate end date
+          const [startYear, startMonth] = startDate.split("-").map(Number);
+          const endYear = startYear + Math.floor(numYears);
+          const endMonth = startMonth + Math.round((numYears % 1) * 12);
+          const adjustedEndYear = endYear + Math.floor((endMonth - 1) / 12);
+          const adjustedEndMonth = ((endMonth - 1) % 12) + 1;
+          const endDate = `${adjustedEndYear}-${String(adjustedEndMonth).padStart(2, "0")}`;
+
+          const inflationResult = calculateInflationAdjustment({
+            amount: finalAmount,
+            fromDate: startDate,
+            toDate: endDate,
+            currency,
+          });
+
+          const realGain = ((finalAmount - inflationResult.adjustedAmount) / inflationResult.adjustedAmount) * 100;
+
+          inflationData = {
+            inflationAdjustedAmount: inflationResult.adjustedAmount,
+            realGain,
+            beatsInflation: realGain > 0,
+          };
+        } catch (err) {
+          console.error("Error calculating inflation:", err);
+        }
+      }
+
+      setResult({
+        initialCapital: capital,
+        finalCapital: capital,
+        totalInterest,
+        totalAmount: finalAmount,
+        periods: totalPeriods,
+        annualRate: rate,
+        currency,
+        chartData,
+        ...inflationData,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al calcular");
+      setResult(null);
+    }
+  };
+
+  const handleCurrencyChange = (newCurrency: Currency) => {
+    setCurrency(newCurrency);
+    setStartDate("");
+    setResult(null);
+    setError(null);
+  };
+
+  const currencySymbol = currency === "ARS" ? "$" : "US$";
+  const currencyName = currency === "ARS" ? "Pesos Argentinos" : "Dólares";
+  const periodLabel = frequency === "monthly" ? "Mes" : "Año";
+
+  return (
+    <div className="space-y-6">
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PiggyBank className="h-5 w-5" />
+            Calculadora de Interés Compuesto
+          </CardTitle>
+          <CardDescription>
+            Proyecta el crecimiento de tu inversión con interés compuesto y compáralo con la inflación
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Currency Selection */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="currency">Moneda</Label>
+              <InfoTooltip content="Elige la moneda en la que invertirás. Esto afectará la comparación con inflación." />
+            </div>
+            <Select
+              id="currency"
+              value={currency}
+              onChange={(e) => handleCurrencyChange(e.target.value as Currency)}
+              className="w-full"
+            >
+              <option value="ARS">💵 Peso Argentino (ARS)</option>
+              <option value="USD">💵 Dólar Estadounidense (USD)</option>
+            </Select>
+          </div>
+
+          {/* Investment Parameters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputWithIcon
+              label="Capital Inicial"
+              icon={DollarSign}
+              type="number"
+              placeholder="100000"
+              value={initialCapital}
+              onChange={(e) => setInitialCapital(e.target.value)}
+              step="0.01"
+              min="0"
+              tooltip={`¿Con cuánto dinero empiezas? Ingresa el monto en ${currencyName} que vas a invertir.`}
+            />
+
+            <InputWithIcon
+              label="Tasa de Interés Anual (%)"
+              icon={Percent}
+              type="number"
+              placeholder="5"
+              value={annualRate}
+              onChange={(e) => setAnnualRate(e.target.value)}
+              step="0.01"
+              min="0"
+              max="100"
+              tooltip="¿Qué porcentaje anual te pagan? Por ejemplo, un plazo fijo puede dar 5% anual, mientras que inversiones más riesgosas pueden dar 10% o más."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputWithIcon
+              label="Período (años)"
+              icon={Calendar}
+              type="number"
+              placeholder="5"
+              value={years}
+              onChange={(e) => setYears(e.target.value)}
+              step="0.5"
+              min="0.5"
+              max="50"
+              tooltip="¿Por cuánto tiempo vas a invertir? Puedes usar decimales (ej: 2.5 años)."
+            />
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="frequency">Frecuencia de Capitalización</Label>
+                <InfoTooltip content="¿Cada cuánto se agregan los intereses al capital? Mensual significa que los intereses se reinvierten cada mes (más ganancia). Anual significa una vez al año." />
+              </div>
+              <Select
+                id="frequency"
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value as "monthly" | "annual")}
+              >
+                <option value="monthly">📅 Mensual (más ganancia)</option>
+                <option value="annual">📅 Anual</option>
+              </Select>
+            </div>
+          </div>
+
+          {/* Inflation Comparison */}
+          <Card className="bg-muted/50">
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="compareInflation"
+                  checked={compareInflation}
+                  onChange={(e) => setCompareInflation(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="compareInflation" className="cursor-pointer">
+                  Comparar con inflación
+                </Label>
+                <InfoTooltip content="Activa esto para ver si tu inversión realmente gana contra la inflación. Es fundamental para saber si estás ganando o perdiendo poder adquisitivo." />
+              </div>
+
+              {compareInflation && (
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Fecha de Inicio de la Inversión</Label>
+                  <Select
+                    id="startDate"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  >
+                    <option value="">Selecciona una fecha</option>
+                    {availableDates.slice(-24).map((date) => (
+                      <option key={date} value={date}>
+                        {new Date(date + "-01").toLocaleDateString("es-AR", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Button onClick={calculateCompoundInterest} className="w-full" size="lg">
+            <Calculator className="h-4 w-4 mr-2" />
+            Calcular Proyección
+          </Button>
+
+          {error && (
+            <div className="p-4 bg-destructive/10 text-destructive rounded-md text-sm">
+              {error}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Results Section */}
+      {result && (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold">Proyección de tu Inversión</h2>
+
+          {/* Metric Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <MetricCard
+              title="Capital Inicial"
+              value={formatCurrency(result.initialCapital, result.currency)}
+              subtitle="Tu inversión"
+              icon={DollarSign}
+              variant="default"
+            />
+
+            <MetricCard
+              title="Intereses Ganados"
+              value={formatCurrency(result.totalInterest, result.currency)}
+              subtitle={`En ${years} año${parseFloat(years) !== 1 ? "s" : ""}`}
+              icon={TrendingUp}
+              trend="up"
+              trendValue={`+${((result.totalInterest / result.initialCapital) * 100).toFixed(1)}%`}
+              variant="success"
+              tooltip="Total de intereses que ganarás durante el período de inversión"
+            />
+
+            <MetricCard
+              title="Total Final"
+              value={formatCurrency(result.totalAmount, result.currency)}
+              subtitle="Capital + Intereses"
+              icon={PiggyBank}
+              variant="default"
+            />
+          </div>
+
+          {/* Inflation Comparison */}
+          {result.beatsInflation !== undefined && result.inflationAdjustedAmount && (
+            <Card className={result.beatsInflation ? "border-green-500/50 bg-green-500/5" : "border-red-500/50 bg-red-500/5"}>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  {result.beatsInflation ? "✅" : "⚠️"} Comparación con Inflación
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Total Final</p>
+                    <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                      {formatCurrency(result.totalAmount, result.currency)}
+                    </p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Ajustado por Inflación</p>
+                    <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
+                      {formatCurrency(result.inflationAdjustedAmount, result.currency)}
+                    </p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Ganancia/Pérdida Real</p>
+                    <p className={`text-xl font-bold ${result.beatsInflation ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      {result.realGain && result.realGain > 0 ? "+" : ""}{result.realGain?.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
+                  <p className="text-sm">
+                    {result.beatsInflation ? (
+                      <>
+                        <strong>¡Excelente!</strong> Tu inversión <strong>SÍ gana contra la inflación</strong>.
+                        Después de ajustar por inflación, tendrás un <strong>{result.realGain?.toFixed(2)}%</strong> más
+                        de poder adquisitivo real. Esto significa que podrás comprar más cosas que si solo hubieras guardado el dinero.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Atención:</strong> Tu inversión <strong>NO gana contra la inflación</strong>.
+                        Aunque ganarás {formatCurrency(result.totalInterest, result.currency)} en intereses,
+                        la inflación erosionará tu poder adquisitivo en un <strong>{Math.abs(result.realGain || 0).toFixed(2)}%</strong>.
+                        Considera buscar inversiones con mayor rendimiento.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Chart */}
+          <CompoundInterestChart
+            data={result.chartData}
+            title="Crecimiento de tu Inversión"
+            tooltip="Muestra cómo crece tu dinero: el área azul es tu capital aportado, el área verde son los intereses ganados"
+            currency={currencySymbol}
+            periodLabel={periodLabel}
+          />
+
+          {/* Explanation Card */}
+          <Card className="border-blue-500/50 bg-blue-500/5">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                💡 ¿Cómo funciona el interés compuesto?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-2">
+              <p>
+                El <strong>interés compuesto</strong> es cuando los intereses que ganas se suman a tu capital
+                y también empiezan a generar intereses. Es como una bola de nieve que crece cada vez más rápido.
+              </p>
+              <p>
+                En tu caso, si inviertes <strong>{formatCurrency(result.initialCapital, result.currency)}</strong> al{" "}
+                <strong>{result.annualRate}% anual</strong> durante <strong>{years} año{parseFloat(years) !== 1 ? "s" : ""}</strong>,
+                terminarás con <strong>{formatCurrency(result.totalAmount, result.currency)}</strong>.
+              </p>
+              <p>
+                Eso significa que ganarás <strong>{formatCurrency(result.totalInterest, result.currency)}</strong> en intereses,
+                lo que representa un <strong>{((result.totalInterest / result.initialCapital) * 100).toFixed(1)}%</strong> de ganancia nominal.
+              </p>
+              {frequency === "monthly" && (
+                <p className="text-primary font-medium">
+                  ✨ Como elegiste capitalización <strong>mensual</strong>, tus intereses se reinvierten cada mes,
+                  lo que genera más ganancia que la capitalización anual.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
