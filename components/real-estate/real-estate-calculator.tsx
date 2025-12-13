@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ResultComparison } from "@/components/ui/result-comparison";
 import { InflationTimelineChart } from "@/components/charts/inflation-timeline-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   calculateInflationAdjustment,
   getAvailableDates,
@@ -18,7 +19,7 @@ import {
   getInflationData,
 } from "@/lib/services/inflation-service";
 import { Currency } from "@/types/inflation";
-import { Home, Ruler, DollarSign, Calculator, TrendingUp, TrendingDown } from "lucide-react";
+import { Home, Ruler, DollarSign, Calculator, TrendingUp, TrendingDown, Calendar } from "lucide-react";
 
 interface RealEstateResult {
   originalPrice: number;
@@ -186,70 +187,50 @@ export function RealEstateCalculator() {
 
           {/* Property Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputWithIcon
+            <NumericInput
               label="Precio del Inmueble"
               icon={DollarSign}
-              type="number"
-              placeholder="10000000"
+              placeholder="10.000.000"
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              step="0.01"
-              min="0"
+              onChange={setPrice}
+              min={0}
+              decimals={2}
+              prefix={currencySymbol}
               tooltip={`¿Cuánto pagaste por el inmueble o cuánto lo valuaste? Ingresa el precio total en ${currencyName}.`}
             />
 
-            <InputWithIcon
+            <NumericInput
               label="Metros Cuadrados"
               icon={Ruler}
-              type="number"
               placeholder="50"
               value={squareMeters}
-              onChange={(e) => setSquareMeters(e.target.value)}
-              step="0.01"
-              min="0"
+              onChange={setSquareMeters}
+              min={0}
+              decimals={2}
+              suffix="m²"
               tooltip="¿Cuántos metros cuadrados tiene la propiedad? Esto nos permite normalizar el valor para comparar correctamente."
             />
           </div>
 
           {/* Date Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="fromDate">Fecha de Compra/Valuación</Label>
-                <InfoTooltip content="¿Cuándo compraste o valuaste el inmueble? Esta será la fecha de referencia." />
-              </div>
-              <Select
-                id="fromDate"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              >
-                <option value="">Selecciona una fecha</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDateDisplay(date)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <DatePicker
+              label="Fecha de Compra/Valuación"
+              value={fromDate}
+              onChange={setFromDate}
+              minDate="2020-01-01"
+              maxDate="2024-11-30"
+              tooltip="¿Cuándo compraste o valuaste el inmueble? Esta será la fecha de referencia."
+            />
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="toDate">Fecha de Comparación</Label>
-                <InfoTooltip content="¿A qué fecha quieres comparar? Por ejemplo, hoy para ver cuánto debería valer." />
-              </div>
-              <Select
-                id="toDate"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              >
-                <option value="">Selecciona una fecha</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDateDisplay(date)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <DatePicker
+              label="Fecha de Comparación"
+              value={toDate}
+              onChange={setToDate}
+              minDate="2020-01-01"
+              maxDate="2024-11-30"
+              tooltip="¿A qué fecha quieres comparar? Por ejemplo, hoy para ver cuánto debería valer."
+            />
           </div>
 
           <Button onClick={handleCalculate} className="w-full" size="lg">
@@ -337,15 +318,15 @@ export function RealEstateCalculator() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <InputWithIcon
+              <NumericInput
                 label="Precio de Venta Actual (opcional)"
                 icon={DollarSign}
-                type="number"
-                placeholder="25000000"
+                placeholder="25.000.000"
                 value={currentPrice}
-                onChange={(e) => setCurrentPrice(e.target.value)}
-                step="0.01"
-                min="0"
+                onChange={setCurrentPrice}
+                min={0}
+                decimals={2}
+                prefix={currencySymbol}
                 tooltip="Si estás vendiendo o tasando el inmueble hoy, ingresa el precio para ver si ganaste o perdiste valor real contra la inflación."
               />
 

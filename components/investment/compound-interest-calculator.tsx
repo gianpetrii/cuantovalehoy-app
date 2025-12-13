@@ -5,17 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { MetricCard } from "@/components/ui/metric-card";
 import { CompoundInterestChart } from "@/components/charts/compound-interest-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   calculateInflationAdjustment,
   getAvailableDates,
   formatCurrency,
 } from "@/lib/services/inflation-service";
 import { Currency } from "@/types/inflation";
-import { TrendingUp, DollarSign, Calculator, Percent, Calendar, PiggyBank } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Calculator, Percent, Calendar, PiggyBank } from "lucide-react";
 
 interface CompoundInterestResult {
   initialCapital: number;
@@ -30,7 +32,13 @@ interface CompoundInterestResult {
     capital: number;
     interest: number;
     total: number;
+    pessimistic?: number;
+    optimistic?: number;
   }>;
+  // Scenarios (when variance is used)
+  hasVariance?: boolean;
+  pessimisticAmount?: number;
+  optimisticAmount?: number;
   // Inflation comparison
   inflationAdjustedAmount?: number;
   realGain?: number;
@@ -40,9 +48,11 @@ interface CompoundInterestResult {
 export function CompoundInterestCalculator() {
   const [currency, setCurrency] = useState<Currency>("ARS");
   const [initialCapital, setInitialCapital] = useState<string>("");
+  const [monthlyContribution, setMonthlyContribution] = useState<string>("0");
   const [annualRate, setAnnualRate] = useState<string>("");
+  const [rateVariance, setRateVariance] = useState<string>("0");
   const [years, setYears] = useState<string>("5");
-  const [frequency, setFrequency] = useState<"monthly" | "annual">("monthly");
+  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly" | "annual">("monthly");
   const [compareInflation, setCompareInflation] = useState<boolean>(true);
   const [startDate, setStartDate] = useState<string>("");
   const [result, setResult] = useState<CompoundInterestResult | null>(null);
@@ -60,10 +70,12 @@ export function CompoundInterestCalculator() {
       }
 
       const capital = parseFloat(initialCapital);
+      const contribution = parseFloat(monthlyContribution) || 0;
       const rate = parseFloat(annualRate);
+      const variance = parseFloat(rateVariance) || 0;
       const numYears = parseFloat(years);
 
-      if (isNaN(capital) || capital <= 0) {
+      if (isNaN(capital) || capital < 0) {
         setError("Por favor ingresa un capital inicial válido");
         return;
       }
@@ -78,29 +90,86 @@ export function CompoundInterestCalculator() {
         return;
       }
 
-      // Calculate compound interest
-      const periodsPerYear = frequency === "monthly" ? 12 : 1;
+      // Calculate compound interest with contributions
+      const periodsPerYear = 
+        frequency === "daily" ? 365 :
+        frequency === "weekly" ? 52 :
+        frequency === "monthly" ? 12 : 1;
       const totalPeriods = Math.floor(numYears * periodsPerYear);
       const ratePerPeriod = rate / 100 / periodsPerYear;
+      
+      // Adjust contribution based on frequency
+      const contributionPerPeriod = 
+        frequency === "daily" ? contribution / 30 :
+        frequency === "weekly" ? contribution / 4 :
+        frequency === "monthly" ? contribution : 
+        contribution * 12;
 
-      // Generate data for each period
+      // Calculate scenarios if variance is provided
+      const hasVariance = variance > 0;
+      const pessimisticRate = hasVariance ? (rate - variance) / 100 / periodsPerYear : ratePerPeriod;
+      const optimisticRate = hasVariance ? (rate + variance) / 100 / periodsPerYear : ratePerPeriod;
+
+      // Generate data for each period (normal scenario + variants if applicable)
       const chartData = [];
-      let currentCapital = capital;
+      let currentAmount = capital;
+      let totalContributed = capital;
+      let pessimisticAmount = capital;
+      let optimisticAmount = capital;
+      let pessimisticContributed = capital;
+      let optimisticContributed = capital;
 
+      // For chart display, we'll sample data points to avoid too many points
+      // Limit to max 100 data points for performance
+      const maxDataPoints = 100;
+      const samplingRate = Math.max(1, Math.floor(totalPeriods / maxDataPoints));
+      
       for (let i = 0; i <= totalPeriods; i++) {
-        const totalAmount = capital * Math.pow(1 + ratePerPeriod, i);
-        const interestEarned = totalAmount - capital;
+        const interestEarned = currentAmount - totalContributed;
+        
+        // Only add data points at sampling intervals or at the end
+        if (i % samplingRate === 0 || i === totalPeriods) {
+          const dataPoint: any = {
+            period: frequency === "daily" ? i / 365 : 
+                    frequency === "weekly" ? i / 52 :
+                    frequency === "monthly" ? i / 12 : i,
+            capital: totalContributed,
+            interest: Math.max(0, interestEarned),
+            total: currentAmount,
+          };
 
-        chartData.push({
-          period: frequency === "monthly" ? i : i / periodsPerYear,
-          capital: capital,
-          interest: interestEarned,
-          total: totalAmount,
-        });
+          // Add variance scenarios if applicable
+          if (hasVariance) {
+            dataPoint.pessimistic = pessimisticAmount;
+            dataPoint.optimistic = optimisticAmount;
+          }
+
+          chartData.push(dataPoint);
+        }
+
+        // Apply interest and add contribution for next period
+        if (i < totalPeriods) {
+          // Normal scenario
+          currentAmount = currentAmount * (1 + ratePerPeriod) + contributionPerPeriod;
+          totalContributed += contributionPerPeriod;
+
+          // Pessimistic scenario
+          if (hasVariance) {
+            pessimisticAmount = pessimisticAmount * (1 + pessimisticRate) + contributionPerPeriod;
+            pessimisticContributed += contributionPerPeriod;
+          }
+
+          // Optimistic scenario
+          if (hasVariance) {
+            optimisticAmount = optimisticAmount * (1 + optimisticRate) + contributionPerPeriod;
+            optimisticContributed += contributionPerPeriod;
+          }
+        }
       }
 
-      const finalAmount = capital * Math.pow(1 + ratePerPeriod, totalPeriods);
-      const totalInterest = finalAmount - capital;
+      const finalAmount = currentAmount;
+      const totalCapitalContributed = capital + (contributionPerPeriod * totalPeriods);
+      const totalInterest = finalAmount - totalCapitalContributed;
 
       // Compare with inflation if requested
       let inflationData = undefined;
@@ -135,13 +204,16 @@ export function CompoundInterestCalculator() {
 
       setResult({
         initialCapital: capital,
-        finalCapital: capital,
+        finalCapital: totalCapitalContributed,
         totalInterest,
         totalAmount: finalAmount,
         periods: totalPeriods,
         annualRate: rate,
         currency,
         chartData,
+        hasVariance,
+        pessimisticAmount: hasVariance ? pessimisticAmount : undefined,
+        optimisticAmount: hasVariance ? optimisticAmount : undefined,
         ...inflationData,
       });
     } catch (err) {
@@ -159,7 +231,10 @@ export function CompoundInterestCalculator() {
 
   const currencySymbol = currency === "ARS" ? "$" : "US$";
   const currencyName = currency === "ARS" ? "Pesos Argentinos" : "Dólares";
-  const periodLabel = frequency === "monthly" ? "Mes" : "Año";
+  const periodLabel = 
+    frequency === "daily" ? "Día" :
+    frequency === "weekly" ? "Semana" :
+    frequency === "monthly" ? "Mes" : "Año";
 
   return (
     <div className="space-y-6">
@@ -193,18 +268,32 @@ export function CompoundInterestCalculator() {
 
           {/* Investment Parameters */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputWithIcon
+            <NumericInput
               label="Capital Inicial"
               icon={DollarSign}
-              type="number"
-              placeholder="100000"
+              placeholder="100.000"
               value={initialCapital}
-              onChange={(e) => setInitialCapital(e.target.value)}
-              step="0.01"
-              min="0"
+              onChange={setInitialCapital}
+              min={0}
+              decimals={2}
+              prefix={currencySymbol}
               tooltip={`¿Con cuánto dinero empiezas? Ingresa el monto en ${currencyName} que vas a invertir.`}
             />
 
+            <NumericInput
+              label="Aporte Mensual"
+              icon={PiggyBank}
+              placeholder="0"
+              value={monthlyContribution}
+              onChange={setMonthlyContribution}
+              min={0}
+              decimals={2}
+              prefix={currencySymbol}
+              tooltip="¿Cuánto vas a aportar cada mes? Deja en 0 si solo quieres invertir el capital inicial."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputWithIcon
               label="Tasa de Interés Anual (%)"
               icon={Percent}
@@ -216,6 +305,19 @@ export function CompoundInterestCalculator() {
               min="0"
               max="100"
               tooltip="¿Qué porcentaje anual te pagan? Por ejemplo, un plazo fijo puede dar 5% anual, mientras que inversiones más riesgosas pueden dar 10% o más."
+            />
+
+            <InputWithIcon
+              label="Varianza de Tasa (±%)"
+              icon={TrendingUp}
+              type="number"
+              placeholder="0"
+              value={rateVariance}
+              onChange={(e) => setRateVariance(e.target.value)}
+              step="0.5"
+              min="0"
+              max="50"
+              tooltip="¿Cuánto puede variar la tasa? Por ejemplo, ±2% mostrará escenarios optimista y pesimista. Deja en 0 para ver solo el escenario normal."
             />
           </div>
 
@@ -236,14 +338,16 @@ export function CompoundInterestCalculator() {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="frequency">Frecuencia de Capitalización</Label>
-                <InfoTooltip content="¿Cada cuánto se agregan los intereses al capital? Mensual significa que los intereses se reinvierten cada mes (más ganancia). Anual significa una vez al año." />
+                <InfoTooltip content="¿Cada cuánto se agregan los intereses al capital? Cuanto más frecuente, mayor es la ganancia por el efecto del interés compuesto." />
               </div>
               <Select
                 id="frequency"
                 value={frequency}
-                onChange={(e) => setFrequency(e.target.value as "monthly" | "annual")}
+                onChange={(e) => setFrequency(e.target.value as "daily" | "weekly" | "monthly" | "annual")}
               >
-                <option value="monthly">📅 Mensual (más ganancia)</option>
+                <option value="daily">📅 Diaria (máxima ganancia)</option>
+                <option value="weekly">📅 Semanal</option>
+                <option value="monthly">📅 Mensual</option>
                 <option value="annual">📅 Anual</option>
               </Select>
             </div>
@@ -267,24 +371,14 @@ export function CompoundInterestCalculator() {
               </div>
 
               {compareInflation && (
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Fecha de Inicio de la Inversión</Label>
-                  <Select
-                    id="startDate"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  >
-                    <option value="">Selecciona una fecha</option>
-                    {availableDates.slice(-24).map((date) => (
-                      <option key={date} value={date}>
-                        {new Date(date + "-01").toLocaleDateString("es-AR", {
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+                <DatePicker
+                  label="Fecha de Inicio de la Inversión"
+                  value={startDate}
+                  onChange={setStartDate}
+                  minDate="2020-01-01"
+                  maxDate="2024-11-30"
+                  tooltip="¿Cuándo empiezas a invertir? Esto se usa para calcular la inflación del período."
+                />
               )}
             </CardContent>
           </Card>
@@ -308,13 +402,22 @@ export function CompoundInterestCalculator() {
           <h2 className="text-2xl font-bold">Proyección de tu Inversión</h2>
 
           {/* Metric Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <MetricCard
               title="Capital Inicial"
               value={formatCurrency(result.initialCapital, result.currency)}
-              subtitle="Tu inversión"
+              subtitle="Inversión inicial"
               icon={DollarSign}
               variant="default"
+            />
+
+            <MetricCard
+              title="Capital Total Aportado"
+              value={formatCurrency(result.finalCapital, result.currency)}
+              subtitle={monthlyContribution !== "0" && parseFloat(monthlyContribution) > 0 ? "Inicial + aportes" : "Sin aportes"}
+              icon={PiggyBank}
+              variant="default"
+              tooltip={monthlyContribution !== "0" && parseFloat(monthlyContribution) > 0 ? "Incluye tu capital inicial más todos los aportes mensuales" : "Solo capital inicial, sin aportes mensuales"}
             />
 
             <MetricCard
@@ -323,7 +426,7 @@ export function CompoundInterestCalculator() {
               subtitle={`En ${years} año${parseFloat(years) !== 1 ? "s" : ""}`}
               icon={TrendingUp}
               trend="up"
-              trendValue={`+${((result.totalInterest / result.initialCapital) * 100).toFixed(1)}%`}
+              trendValue={`+${((result.totalInterest / result.finalCapital) * 100).toFixed(1)}%`}
               variant="success"
               tooltip="Total de intereses que ganarás durante el período de inversión"
             />
@@ -332,10 +435,67 @@ export function CompoundInterestCalculator() {
               title="Total Final"
               value={formatCurrency(result.totalAmount, result.currency)}
               subtitle="Capital + Intereses"
-              icon={PiggyBank}
+              icon={Calculator}
               variant="default"
             />
           </div>
+
+          {/* Variance Scenarios */}
+          {result.hasVariance && result.pessimisticAmount && result.optimisticAmount && (
+            <Card className="border-primary/50 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  📊 Escenarios según Varianza de Tasa
+                  <InfoTooltip content="Estos son los posibles resultados si la tasa de interés varía. El escenario pesimista usa una tasa menor, el optimista usa una tasa mayor." />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <MetricCard
+                    title="Escenario Pesimista"
+                    value={formatCurrency(result.pessimisticAmount, result.currency)}
+                    subtitle={`Tasa: ${(result.annualRate - parseFloat(rateVariance)).toFixed(2)}%`}
+                    icon={TrendingDown}
+                    variant="danger"
+                  />
+                  
+                  <MetricCard
+                    title="Escenario Normal"
+                    value={formatCurrency(result.totalAmount, result.currency)}
+                    subtitle={`Tasa: ${result.annualRate.toFixed(2)}%`}
+                    icon={TrendingUp}
+                    variant="default"
+                  />
+                  
+                  <MetricCard
+                    title="Escenario Optimista"
+                    value={formatCurrency(result.optimisticAmount, result.currency)}
+                    subtitle={`Tasa: ${(result.annualRate + parseFloat(rateVariance)).toFixed(2)}%`}
+                    icon={TrendingUp}
+                    variant="success"
+                  />
+                </div>
+
+                <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Diferencia entre escenarios:</strong>
+                  </p>
+                  <div className="mt-2 flex justify-between text-sm">
+                    <span>Pesimista vs Normal:</span>
+                    <span className="font-bold text-destructive">
+                      {formatCurrency(result.totalAmount - result.pessimisticAmount, result.currency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Optimista vs Normal:</span>
+                    <span className="font-bold text-green-600 dark:text-green-400">
+                      +{formatCurrency(result.optimisticAmount - result.totalAmount, result.currency)}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Inflation Comparison */}
           {result.beatsInflation !== undefined && result.inflationAdjustedAmount && (
@@ -394,10 +554,14 @@ export function CompoundInterestCalculator() {
           {/* Chart */}
           <CompoundInterestChart
             data={result.chartData}
-            title="Crecimiento de tu Inversión"
-            tooltip="Muestra cómo crece tu dinero: el área azul es tu capital aportado, el área verde son los intereses ganados"
+            title={result.hasVariance ? "Proyección con Escenarios de Varianza" : "Crecimiento de tu Inversión"}
+            tooltip={result.hasVariance 
+              ? "Las líneas muestran diferentes escenarios: pesimista (rojo, punteado), normal (azul, sólido) y optimista (verde, punteado)"
+              : "Muestra cómo crece tu dinero: el área azul es tu capital aportado, el área verde son los intereses ganados"
+            }
             currency={currencySymbol}
             periodLabel={periodLabel}
+            showVariance={result.hasVariance}
           />
 
           {/* Explanation Card */}

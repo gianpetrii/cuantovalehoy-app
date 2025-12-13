@@ -5,22 +5,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ResultComparison } from "@/components/ui/result-comparison";
 import { InflationTimelineChart } from "@/components/charts/inflation-timeline-chart";
 import { ComparisonBarChart } from "@/components/charts/comparison-bar-chart";
 import { InflationGauge } from "@/components/charts/inflation-gauge";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   calculateInflationAdjustment,
   getAvailableDates,
   formatDateDisplay,
   formatCurrency,
   getInflationData,
+  calculateDollarizationComparison,
 } from "@/lib/services/inflation-service";
 import { Currency, CalculationResult } from "@/types/inflation";
-import { TrendingUp, Calculator, DollarSign, Calendar, Flame } from "lucide-react";
+import { TrendingUp, Calculator, DollarSign, Calendar, Flame, ArrowRightLeft } from "lucide-react";
 
 export function InflationCalculatorEnhanced() {
   const [currency, setCurrency] = useState<Currency>("ARS");
@@ -29,8 +31,15 @@ export function InflationCalculatorEnhanced() {
   const [toDate, setToDate] = useState<string>("");
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dollarizationResult, setDollarizationResult] = useState<any>(null);
+  const [showDollarization, setShowDollarization] = useState(true);
+  const [autoOpenToDate, setAutoOpenToDate] = useState(false);
 
   const availableDates = getAvailableDates(currency);
+  
+  // Calcular días entre fechas
+  const daysBetween = fromDate && toDate ? 
+    Math.abs(Math.floor((new Date(toDate).getTime() - new Date(fromDate).getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
   const handleCalculate = () => {
     try {
@@ -52,17 +61,40 @@ export function InflationCalculatorEnhanced() {
         return;
       }
 
+      // Convertir fechas de YYYY-MM-DD a YYYY-MM para el servicio
+      const fromDateYM = fromDate.substring(0, 7); // "2024-01-15" -> "2024-01"
+      const toDateYM = toDate.substring(0, 7);
+
       const calculationResult = calculateInflationAdjustment({
         amount: numAmount,
-        fromDate,
-        toDate,
+        fromDate: fromDateYM,
+        toDate: toDateYM,
         currency,
       });
 
       setResult(calculationResult);
+
+      // Si es ARS, calcular también la comparación con dolarización
+      if (currency === "ARS" && showDollarization) {
+        try {
+          const dollarComparison = calculateDollarizationComparison(
+            numAmount,
+            fromDateYM,
+            toDateYM,
+            "blue"
+          );
+          setDollarizationResult(dollarComparison);
+        } catch (err) {
+          console.error("Error calculating dollarization:", err);
+          setDollarizationResult(null);
+        }
+      } else {
+        setDollarizationResult(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al calcular");
       setResult(null);
+      setDollarizationResult(null);
     }
   };
 
@@ -125,7 +157,7 @@ export function InflationCalculatorEnhanced() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            Calculadora de Inflación
+            Calculadora de Poder Adquisitivo
           </CardTitle>
           <CardDescription>
             Descubre cuánto vale tu dinero hoy, ajustado por inflación
@@ -150,63 +182,56 @@ export function InflationCalculatorEnhanced() {
           </div>
 
           {/* Amount Input */}
-          <InputWithIcon
+          <NumericInput
             label="Monto"
             icon={DollarSign}
-            type="number"
-            placeholder="10000"
+            placeholder="10.000"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            step="0.01"
-            min="0"
+            onChange={setAmount}
+            min={0}
+            decimals={2}
+            prefix={currencySymbol}
             tooltip={`¿Cuánto dinero tenías? Por ejemplo, tu salario, ahorros, o el precio de algo que compraste. Ingresa el monto en ${currencyName}.`}
           />
 
           {/* Date Selection */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="fromDate" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  Fecha de Origen
-                </Label>
-                <InfoTooltip content="¿Cuándo tenías ese dinero? Selecciona el mes y año en el pasado." />
-              </div>
-              <Select
-                id="fromDate"
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <DatePicker
+                label="Fecha de Origen"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              >
-                <option value="">Selecciona una fecha</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDateDisplay(date)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+                onChange={(newDate) => {
+                  setFromDate(newDate);
+                  setAutoOpenToDate(true);
+                }}
+                onOpen={() => setAutoOpenToDate(false)}
+                minDate="2020-01-01"
+                maxDate="2024-11-30"
+                tooltip="¿Cuándo tenías ese dinero? Selecciona el día, mes y año en el pasado."
+              />
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="toDate" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  Fecha de Destino
-                </Label>
-                <InfoTooltip content="¿A qué fecha quieres ajustar? Por ejemplo, hoy para ver cuánto vale ahora ese dinero." />
-              </div>
-              <Select
-                id="toDate"
+              <DatePicker
+                label="Fecha de Destino"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              >
-                <option value="">Selecciona una fecha</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDateDisplay(date)}
-                  </option>
-                ))}
-              </Select>
+                onChange={setToDate}
+                minDate="2020-01-01"
+                maxDate="2024-11-30"
+                autoOpen={autoOpenToDate}
+                onOpen={() => setAutoOpenToDate(false)}
+                tooltip="¿A qué fecha quieres ajustar? Por ejemplo, hoy para ver cuánto vale ahora ese dinero."
+              />
             </div>
+            
+            {/* Preview de días seleccionados */}
+            {fromDate && toDate && (
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                <Calendar className="h-4 w-4" />
+                <span>
+                  <strong>{daysBetween}</strong> día{daysBetween !== 1 ? "s" : ""} seleccionado{daysBetween !== 1 ? "s" : ""}
+                  {daysBetween > 365 && ` (${(daysBetween / 365).toFixed(1)} años)`}
+                </span>
+              </div>
+            )}
           </div>
 
           <Button onClick={handleCalculate} className="w-full" size="lg">
@@ -295,6 +320,121 @@ export function InflationCalculatorEnhanced() {
             title="Medidor de Inflación"
             tooltip="Visualización del nivel de inflación: verde (baja), amarillo (media), rojo (alta)"
           />
+
+          {/* Dollarization Comparison - Only for ARS */}
+          {dollarizationResult && result.currency === "ARS" && (
+            <Card className={dollarizationResult.wasWorthIt ? "border-green-500/50 bg-green-500/5" : "border-yellow-500/50 bg-yellow-500/5"}>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ArrowRightLeft className="h-5 w-5" />
+                  ¿Convenía Dolarizar?
+                </CardTitle>
+                <CardDescription>
+                  Comparación: mantener en pesos vs convertir a dólares
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Comparison Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Option A - Keep ARS */}
+                  <Card className="border-red-500/30">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Opción A: Mantener en Pesos</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Monto original:</span>
+                        <span className="font-medium">{formatCurrency(dollarizationResult.originalARS, "ARS")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Inflación ARS:</span>
+                        <span className="font-medium text-destructive">+{dollarizationResult.arsInflation.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-2 border-t">
+                        <span className="text-muted-foreground">Valor ajustado:</span>
+                        <span className="font-bold">{formatCurrency(dollarizationResult.adjustedARS, "ARS")}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Option B - Dollarize */}
+                  <Card className={dollarizationResult.wasWorthIt ? "border-green-500/30" : "border-yellow-500/30"}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Opción B: Dolarizar (Blue)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Convertías a:</span>
+                        <span className="font-medium">{formatCurrency(dollarizationResult.initialUSD, "USD")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">TC inicial:</span>
+                        <span className="text-xs">${dollarizationResult.initialExchangeRate.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Inflación USD:</span>
+                        <span className="font-medium text-green-600">+{dollarizationResult.usdInflation.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">USD ajustado:</span>
+                        <span className="font-medium">{formatCurrency(dollarizationResult.adjustedUSD, "USD")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">TC final:</span>
+                        <span className="text-xs">${dollarizationResult.finalExchangeRate.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-2 border-t">
+                        <span className="text-muted-foreground">Hoy serían:</span>
+                        <span className="font-bold">{formatCurrency(dollarizationResult.finalARS, "ARS")}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Result */}
+                <Card className={dollarizationResult.wasWorthIt ? "bg-green-500/10 border-green-500" : "bg-yellow-500/10 border-yellow-500"}>
+                  <CardContent className="pt-6">
+                    <div className="text-center space-y-2">
+                      <div className="text-3xl font-bold">
+                        {dollarizationResult.wasWorthIt ? "✅" : "⚠️"}
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {dollarizationResult.wasWorthIt ? "¡SÍ convenía dolarizar!" : "Resultado mixto"}
+                      </div>
+                      <div className="text-2xl font-bold">
+                        {dollarizationResult.dollarizationGain > 0 ? "+" : ""}
+                        {dollarizationResult.dollarizationGain.toFixed(1)}%
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {dollarizationResult.wasWorthIt ? (
+                          <>
+                            Dolarizando hubieras ganado <strong>{dollarizationResult.dollarizationGain.toFixed(1)}%</strong> más
+                            que manteniendo en pesos. La diferencia es de{" "}
+                            <strong>{formatCurrency(dollarizationResult.finalARS - dollarizationResult.adjustedARS, "ARS")}</strong>.
+                          </>
+                        ) : (
+                          <>
+                            La diferencia entre ambas opciones es de solo{" "}
+                            <strong>{Math.abs(dollarizationResult.dollarizationGain).toFixed(1)}%</strong>.
+                            Ambas estrategias tuvieron resultados similares.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Explanation */}
+                <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-md">
+                  <p>
+                    <strong>💡 Cómo se calcula:</strong> Se convierte el monto a USD al tipo de cambio blue de la fecha inicial,
+                    se ajusta por la inflación estadounidense (CPI), y se reconvierte a ARS al tipo de cambio blue actual.
+                    Esto muestra si convenía &quot;dolarizar&quot; tu dinero en el pasado.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Explanation Card */}
           <Card className="border-blue-500/50 bg-blue-500/5">

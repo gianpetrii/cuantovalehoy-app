@@ -5,9 +5,9 @@ export default function AboutPage() {
     <div className="container py-12 md:py-20">
       <div className="mx-auto max-w-3xl space-y-8">
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold">Acerca de la Calculadora de Inflación</h1>
+          <h1 className="text-4xl font-bold">Acerca de CuantoValeHoy</h1>
           <p className="text-lg text-muted-foreground">
-            Herramienta para entender el impacto real de la inflación en tu poder adquisitivo.
+            Un proyecto personal para ayudar a entender el impacto real de la inflación en tu poder adquisitivo.
           </p>
         </div>
 
@@ -17,15 +17,31 @@ export default function AboutPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p>
-              La Calculadora de Inflación es una herramienta que te permite calcular
-              cómo la inflación afecta el valor del dinero a lo largo del tiempo,
+              CuantoValeHoy es un proyecto personal que nació de la necesidad de entender mejor
+              cómo la inflación afecta nuestro dinero día a día. Es una herramienta gratuita
+              que te permite calcular el poder adquisitivo real de tu dinero a lo largo del tiempo,
               tanto en pesos argentinos como en dólares estadounidenses.
             </p>
             <p>
-              Con esta calculadora puedes entender cuánto valdría hoy un monto del
-              pasado, o comparar el poder adquisitivo entre diferentes períodos de tiempo.
-              También puedes realizar conversiones entre monedas considerando tanto el
-              tipo de cambio como la inflación en ambas monedas.
+              Incluye calculadoras para inflación, valuación de inmuebles por m², e interés compuesto,
+              todas diseñadas para ser fáciles de usar y entender, incluso si no tenés conocimientos técnicos.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>¿Por qué este proyecto?</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p>
+              Este proyecto es un hobbie personal con el objetivo de promover la educación financiera.
+              Creo que todos deberíamos tener acceso a herramientas que nos ayuden a entender mejor
+              nuestras finanzas personales y el impacto de la inflación en nuestro día a día.
+            </p>
+            <p>
+              La educación financiera es fundamental para tomar mejores decisiones con nuestro dinero,
+              y esta herramienta busca hacer ese conocimiento más accesible para todos.
             </p>
           </CardContent>
         </Card>
@@ -70,23 +86,23 @@ export default function AboutPage() {
             <ul className="space-y-2">
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
-                Cálculo de inflación para ARS y USD
+                Calculadora de poder adquisitivo (ARS y USD)
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
-                Ajuste de valores históricos por inflación
+                Comparación con dolarización (¿convenía dolarizar?)
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
-                Conversión entre ARS y USD
+                Calculadora de valor de inmuebles por m²
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
-                Tipo de cambio oficial y blue
+                Calculadora de interés compuesto con escenarios
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
-                Conversión con ajuste de inflación
+                Gráficos interactivos y visualizaciones
               </li>
               <li className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-primary" />
@@ -106,18 +122,23 @@ export default function AboutPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Aviso Importante</CardTitle>
+            <CardTitle>Importante</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Los datos proporcionados por esta herramienta son aproximados y tienen
-              fines informativos únicamente. No constituyen asesoramiento financiero,
-              contable o de inversión.
+              <strong>Este es un proyecto personal de hobbie.</strong> Los datos proporcionados
+              son aproximados y tienen fines educativos e informativos únicamente. No constituyen
+              asesoramiento financiero, contable o de inversión.
             </p>
             <p className="text-sm text-muted-foreground">
               Los cálculos se basan en datos históricos que pueden tener variaciones
               según la fuente consultada. Para decisiones financieras importantes,
-              consulte con un profesional calificado.
+              consultá con un profesional calificado.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Si encontrás algún error o tenés sugerencias, ¡no dudes en escribirme!
+              Aunque este es un proyecto que mantengo en mi tiempo libre, siempre
+              estoy abierto a recibir feedback para mejorarlo.
             </p>
           </CardContent>
         </Card>

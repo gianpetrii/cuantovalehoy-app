@@ -374,6 +374,76 @@ export function getAvailableDates(currency: Currency): string[] {
 }
 
 /**
+ * Calculate what would happen if you dollarized (ARS to USD comparison)
+ */
+export function calculateDollarizationComparison(
+  arsAmount: number,
+  fromDate: string,
+  toDate: string,
+  exchangeRateType: "official" | "blue" = "blue"
+) {
+  // 1. Convert ARS to USD at fromDate
+  const initialConversion = convertCurrency({
+    amount: arsAmount,
+    fromCurrency: "ARS",
+    toCurrency: "USD",
+    date: fromDate,
+    exchangeRateType,
+  });
+
+  // 2. Adjust USD by USD inflation
+  const usdInflationResult = calculateInflationAdjustment({
+    amount: initialConversion.convertedAmount,
+    fromDate,
+    toDate,
+    currency: "USD",
+  });
+
+  // 3. Convert back to ARS at toDate
+  const finalConversion = convertCurrency({
+    amount: usdInflationResult.adjustedAmount,
+    fromCurrency: "USD",
+    toCurrency: "ARS",
+    date: toDate,
+    exchangeRateType,
+  });
+
+  // 4. Calculate ARS inflation for comparison
+  const arsInflationResult = calculateInflationAdjustment({
+    amount: arsAmount,
+    fromDate,
+    toDate,
+    currency: "ARS",
+  });
+
+  const dollarizationGain =
+    ((finalConversion.convertedAmount - arsInflationResult.adjustedAmount) /
+      arsInflationResult.adjustedAmount) *
+    100;
+
+  return {
+    // Original
+    originalARS: arsAmount,
+    
+    // Dollarization path
+    initialUSD: initialConversion.convertedAmount,
+    initialExchangeRate: initialConversion.exchangeRate,
+    adjustedUSD: usdInflationResult.adjustedAmount,
+    usdInflation: usdInflationResult.inflationRate,
+    finalARS: finalConversion.convertedAmount,
+    finalExchangeRate: finalConversion.exchangeRate,
+    
+    // ARS path
+    adjustedARS: arsInflationResult.adjustedAmount,
+    arsInflation: arsInflationResult.inflationRate,
+    
+    // Comparison
+    dollarizationGain,
+    wasWorthIt: dollarizationGain > 0,
+  };
+}
+
+/**
  * Format date for display (YYYY-MM to Month Year)
  */
 export function formatDateDisplay(date: string): string {

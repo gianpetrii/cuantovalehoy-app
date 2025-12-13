@@ -1,8 +1,9 @@
+"use client";
+
 import { InflationCalculatorEnhanced } from "@/components/inflation/inflation-calculator-enhanced";
-import { CurrencyConverter } from "@/components/inflation/currency-converter";
 import { RealEstateCalculator } from "@/components/real-estate/real-estate-calculator";
 import { CompoundInterestCalculator } from "@/components/investment/compound-interest-calculator";
-import { TrendingUp, DollarSign, Calculator, Info, Home, PiggyBank, Flame } from "lucide-react";
+import { TrendingUp, Calculator, Info, Home, PiggyBank, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
@@ -19,7 +20,7 @@ export default function HomePage() {
             </span>
           </h1>
           <p className="max-w-[700px] text-lg text-muted-foreground sm:text-xl">
-            Calculadoras financieras para entender el impacto de la inflación,
+            Calculadoras financieras para entender tu poder adquisitivo,
             valorar inmuebles y proyectar inversiones. Todo en un solo lugar.
           </p>
         </div>
@@ -27,15 +28,15 @@ export default function HomePage() {
 
       {/* Info Cards */}
       <section className="container pb-8">
-        <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-4">
+        <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-3">
           <Card>
             <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Flame className="h-6 w-6 text-primary" />
+                <Wallet className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="font-bold">Inflación</h3>
+              <h3 className="font-bold">Poder Adquisitivo</h3>
               <p className="text-sm text-muted-foreground">
-                Calcula el impacto de la inflación en ARS y USD
+                Calcula cómo cambia el valor de tu dinero en ARS y USD
               </p>
             </CardContent>
           </Card>
@@ -57,21 +58,9 @@ export default function HomePage() {
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <PiggyBank className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="font-bold">Inversiones</h3>
+              <h3 className="font-bold">Interés Compuesto</h3>
               <p className="text-sm text-muted-foreground">
-                Proyecta el crecimiento con interés compuesto
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <DollarSign className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-bold">Conversión</h3>
-              <p className="text-sm text-muted-foreground">
-                Tipo de cambio con ajuste por inflación
+                Proyecta el crecimiento de tus ahorros e inversiones
               </p>
             </CardContent>
           </Card>
@@ -81,12 +70,12 @@ export default function HomePage() {
       {/* Calculators Section */}
       <section className="container pb-12">
         <div className="mx-auto max-w-6xl">
-          <Tabs defaultValue="inflation" className="w-full">
+          <Tabs defaultValue="purchasing-power" className="w-full">
             <div className="flex justify-center mb-8">
-              <TabsList className="grid w-full max-w-3xl grid-cols-4">
-                <TabsTrigger value="inflation" className="flex items-center gap-2">
-                  <Flame className="h-4 w-4" />
-                  <span className="hidden sm:inline">Inflación</span>
+              <TabsList className="grid w-full max-w-2xl grid-cols-3">
+                <TabsTrigger value="purchasing-power" className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  <span className="hidden sm:inline">Poder Adquisitivo</span>
                 </TabsTrigger>
                 <TabsTrigger value="real-estate" className="flex items-center gap-2">
                   <Home className="h-4 w-4" />
@@ -94,16 +83,12 @@ export default function HomePage() {
                 </TabsTrigger>
                 <TabsTrigger value="investment" className="flex items-center gap-2">
                   <PiggyBank className="h-4 w-4" />
-                  <span className="hidden sm:inline">Inversiones</span>
-                </TabsTrigger>
-                <TabsTrigger value="conversion" className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  <span className="hidden sm:inline">Conversión</span>
+                  <span className="hidden sm:inline">Interés Compuesto</span>
                 </TabsTrigger>
               </TabsList>
             </div>
 
-            <TabsContent value="inflation">
+            <TabsContent value="purchasing-power">
               <InflationCalculatorEnhanced />
             </TabsContent>
 
@@ -113,10 +98,6 @@ export default function HomePage() {
 
             <TabsContent value="investment">
               <CompoundInterestCalculator />
-            </TabsContent>
-
-            <TabsContent value="conversion">
-              <CurrencyConverter />
             </TabsContent>
           </Tabs>
         </div>
@@ -132,9 +113,10 @@ export default function HomePage() {
                 <h3 className="text-xl font-bold">¿Cómo funciona?</h3>
                 <div className="space-y-4 text-muted-foreground">
                   <p>
-                    <strong>💰 Calculadora de Inflación:</strong> Ajusta un monto histórico
+                    <strong>💰 Calculadora de Poder Adquisitivo:</strong> Ajusta un monto histórico
                     considerando la inflación acumulada entre dos fechas. Incluye gráficos
                     de evolución temporal y medidores visuales para entender el impacto real.
+                    También compara si convenía dolarizar tu dinero en el pasado.
                   </p>
                   <p>
                     <strong>🏠 Calculadora de Inmuebles:</strong> Calcula el valor de propiedades
@@ -145,11 +127,6 @@ export default function HomePage() {
                     <strong>📈 Calculadora de Inversiones:</strong> Proyecta el crecimiento de
                     tu dinero con interés compuesto y compáralo automáticamente con la inflación
                     para saber si realmente estás ganando poder adquisitivo.
-                  </p>
-                  <p>
-                    <strong>💱 Conversión con Inflación:</strong> Convierte entre pesos argentinos
-                    y dólares en fechas históricas, ajustando por inflación. Ideal para entender
-                    si convenía dolarizar en el pasado.
                   </p>
                   <p className="text-sm pt-2 border-t">
                     <strong>📊 Fuentes de datos:</strong> INDEC (inflación ARS), US Bureau of Labor Statistics (inflación USD),

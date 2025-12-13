@@ -8,8 +8,11 @@ import { Footer } from "@/components/layout/footer";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Calculadora de Inflación - ARS y USD",
-  description: "Calculadora de inflación para pesos argentinos y dólares. Ajusta valores históricos por inflación y convierte entre monedas.",
+  title: "CuantoValeHoy - Calculadoras Financieras",
+  description: "Calculadoras de poder adquisitivo, valuación de inmuebles e interés compuesto. Entiende el impacto de la inflación en ARS y USD.",
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export default function RootLayout({
