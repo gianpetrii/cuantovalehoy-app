@@ -73,34 +73,24 @@ export function TooltipRoot({ children }: TooltipRootProps) {
   );
 }
 
-interface TooltipTriggerProps {
+interface TooltipTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  asChild?: boolean;
   className?: string;
 }
 
 export const TooltipTrigger = React.forwardRef<HTMLButtonElement, TooltipTriggerProps>(
-  ({ children, asChild, className }, ref) => {
+  ({ children, className, onMouseEnter, onMouseLeave, ...props }, ref) => {
     const context = React.useContext(TooltipContext);
     
-    const handleMouseEnter = () => context?.setOpen(true);
-    const handleMouseLeave = () => context?.setOpen(false);
-
-    if (asChild && React.isValidElement(children)) {
-      const childProps = children.props as any;
-      return React.cloneElement(children, {
-        ...childProps,
-        ref,
-        onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
-          handleMouseEnter();
-          childProps.onMouseEnter?.(e);
-        },
-        onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
-          handleMouseLeave();
-          childProps.onMouseLeave?.(e);
-        },
-      } as any);
-    }
+    const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+      context?.setOpen(true);
+      onMouseEnter?.(e);
+    };
+    
+    const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+      context?.setOpen(false);
+      onMouseLeave?.(e);
+    };
 
     return (
       <button
@@ -109,6 +99,7 @@ export const TooltipTrigger = React.forwardRef<HTMLButtonElement, TooltipTrigger
         className={className}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        {...props}
       >
         {children}
       </button>

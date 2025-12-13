@@ -30,20 +30,17 @@ export function InfoTooltip({
   return (
     <TooltipProvider delayDuration={200}>
       <TooltipRoot>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex items-center justify-center rounded-full",
-              "text-muted-foreground hover:text-foreground",
-              "transition-colors focus-visible:outline-none focus-visible:ring-2",
-              "focus-visible:ring-ring focus-visible:ring-offset-2",
-              className
-            )}
-            aria-label="Más información"
-          >
-            <HelpCircle className={cn("h-4 w-4", iconClassName)} />
-          </button>
+        <TooltipTrigger
+          className={cn(
+            "inline-flex items-center justify-center rounded-full",
+            "text-muted-foreground hover:text-foreground",
+            "transition-colors focus-visible:outline-none focus-visible:ring-2",
+            "focus-visible:ring-ring focus-visible:ring-offset-2",
+            className
+          )}
+          aria-label="Más información"
+        >
+          <HelpCircle className={cn("h-4 w-4", iconClassName)} />
         </TooltipTrigger>
         <TooltipContent side={side} className="max-w-xs text-sm">
           {content}

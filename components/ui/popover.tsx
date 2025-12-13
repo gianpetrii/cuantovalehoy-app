@@ -26,16 +26,15 @@ export function Popover({ children }: PopoverProps) {
   );
 }
 
-interface PopoverTriggerProps {
+interface PopoverTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  asChild?: boolean;
   className?: string;
 }
 
 export const PopoverTrigger = React.forwardRef<
   HTMLButtonElement,
   PopoverTriggerProps
->(({ children, asChild, className }, ref) => {
+>(({ children, className, onClick, ...props }, ref) => {
   const context = React.useContext(PopoverContext);
   if (!context) {
     throw new Error("PopoverTrigger must be used within Popover");
@@ -43,22 +42,17 @@ export const PopoverTrigger = React.forwardRef<
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     context.setOpen(!context.open);
+    onClick?.(e);
   };
 
-  if (asChild && React.isValidElement(children)) {
-    const childProps = children.props as any;
-    return React.cloneElement(children, {
-      ...childProps,
-      ref,
-      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
-        handleClick(e);
-        childProps.onClick?.(e);
-      },
-    } as any);
-  }
-
   return (
-    <button ref={ref} onClick={handleClick} className={className}>
+    <button 
+      ref={ref} 
+      onClick={handleClick} 
+      className={className}
+      type="button"
+      {...props}
+    >
       {children}
     </button>
   );
