@@ -20,15 +20,38 @@ export default function ContactPage() {
     e.preventDefault();
     setLoading(true);
 
-    // Simular envío de formulario
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          access_key: process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY,
+          name: formData.name,
+          email: formData.email,
+          message: formData.message,
+        }),
+      });
 
-    toast.success("Mensaje enviado correctamente", {
-      description: "Te responderemos lo antes posible.",
-    });
+      const result = await response.json();
 
-    setFormData({ name: "", email: "", message: "" });
-    setLoading(false);
+      if (result.success) {
+        toast.success("Mensaje enviado correctamente", {
+          description: "Te responderemos lo antes posible.",
+        });
+        setFormData({ name: "", email: "", message: "" });
+      } else {
+        throw new Error("Error al enviar el mensaje");
+      }
+    } catch (error) {
+      toast.error("Error al enviar el mensaje", {
+        description: "Por favor, intenta nuevamente más tarde.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (
@@ -46,9 +69,27 @@ export default function ContactPage() {
         <div className="space-y-4 text-center">
           <h1 className="text-4xl font-bold">Contacto</h1>
           <p className="text-lg text-muted-foreground">
-            ¿Tienes alguna pregunta? Nos encantaría saber de ti.
+            ¿Encontraste un error? ¿Tenés alguna sugerencia? Me encantaría conocer tu opinión.
           </p>
         </div>
+
+        <Card className="border-blue-500/50 bg-blue-500/5">
+          <CardContent className="pt-6">
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                👋 <strong>Hola!</strong> Este es un proyecto personal que mantengo en mi tiempo libre
+                como hobbie y para promover la educación financiera.
+              </p>
+              <p>
+                💬 Podés escribirme con cualquier comentario, sugerencia o si encontraste algún error.
+                Respondo cuando puedo, pero tené en cuenta que no es un servicio de soporte 24/7.
+              </p>
+              <p>
+                🙏 Agradezco mucho tu feedback, me ayuda a mejorar la herramienta para todos!
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
@@ -59,7 +100,10 @@ export default function ContactPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">contacto@baseapp.com</p>
+              <p className="text-muted-foreground">contacto@cuantovalehoy.com</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Respondo en mi tiempo libre
+              </p>
             </CardContent>
           </Card>
 
@@ -67,12 +111,15 @@ export default function ContactPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                Soporte
+                Feedback
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                Respuesta en menos de 24 horas
+                Sugerencias, errores, ideas
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Todo feedback es bienvenido
               </p>
             </CardContent>
           </Card>
@@ -80,7 +127,7 @@ export default function ContactPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Envíanos un mensaje</CardTitle>
+            <CardTitle>Enviame un mensaje</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -114,7 +161,7 @@ export default function ContactPage() {
                 <textarea
                   id="message"
                   name="message"
-                  placeholder="Tu mensaje..."
+                  placeholder="Contame qué te gustaría mejorar, si encontraste algún error, o cualquier sugerencia que tengas..."
                   value={formData.message}
                   onChange={handleChange}
                   required
