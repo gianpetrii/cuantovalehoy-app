@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "@/lib/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LogOut, User, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useState } from "react";
 
 export function Header() {
-  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
