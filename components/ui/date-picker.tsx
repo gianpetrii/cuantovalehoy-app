@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 interface DatePickerProps {
   label: string;
@@ -44,6 +43,7 @@ export function DatePicker({
   
   const [viewYear, setViewYear] = React.useState(initialDate.getFullYear());
   const [viewMonth, setViewMonth] = React.useState(initialDate.getMonth());
+  const [isOpen, setIsOpen] = React.useState(false);
 
   // Actualizar la vista cuando cambia el valor
   React.useEffect(() => {
@@ -93,6 +93,7 @@ export function DatePicker({
     const dayStr = String(day).padStart(2, "0");
     const newValue = `${viewYear}-${month}-${dayStr}`;
     onChange(newValue);
+    setIsOpen(false);
   };
 
   const isDateDisabled = (year: number, month: number, day: number) => {
@@ -162,8 +163,10 @@ export function DatePicker({
         {tooltip && <InfoTooltip content={tooltip} />}
       </div>
 
-      <Popover>
-        <PopoverTrigger
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
           className={cn(
             "w-full justify-start text-left font-normal inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2",
             !value && "text-muted-foreground",
@@ -172,9 +175,19 @@ export function DatePicker({
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {formatDisplayValue()}
-        </PopoverTrigger>
+        </button>
         
-        <PopoverContent align="start" className="w-auto p-3">
+        {isOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+            />
+            {/* Calendar Content */}
+            <div className="absolute left-0 top-full mt-2 z-50 rounded-md border bg-popover p-3 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 w-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <Button
@@ -248,8 +261,10 @@ export function DatePicker({
               );
             })}
           </div>
-        </PopoverContent>
-      </Popover>
+            </div>
+          </>
+        )}
+      </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
