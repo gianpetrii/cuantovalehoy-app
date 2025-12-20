@@ -219,7 +219,7 @@ export function RealEstateCalculator() {
               value={fromDate}
               onChange={setFromDate}
               minDate="2020-01-01"
-              maxDate="2024-11-30"
+              maxDate="2025-12-31"
               tooltip="¿Cuándo compraste o valuaste el inmueble? Esta será la fecha de referencia."
             />
 
@@ -228,7 +228,7 @@ export function RealEstateCalculator() {
               value={toDate}
               onChange={setToDate}
               minDate="2020-01-01"
-              maxDate="2024-11-30"
+              maxDate="2025-12-31"
               tooltip="¿A qué fecha quieres comparar? Por ejemplo, hoy para ver cuánto debería valer."
             />
           </div>

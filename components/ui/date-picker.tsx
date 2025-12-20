@@ -32,7 +32,7 @@ export function DatePicker({
   value,
   onChange,
   minDate = "2020-01-01",
-  maxDate = "2024-11-30",
+  maxDate = "2025-12-31",
   tooltip,
   error,
   className,

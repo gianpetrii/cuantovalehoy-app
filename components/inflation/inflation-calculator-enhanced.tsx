@@ -206,7 +206,7 @@ export function InflationCalculatorEnhanced() {
                 }}
                 onOpen={() => setAutoOpenToDate(false)}
                 minDate="2020-01-01"
-                maxDate="2024-11-30"
+                maxDate="2025-12-31"
                 tooltip="¿Cuándo tenías ese dinero? Selecciona el día, mes y año en el pasado."
               />
 
@@ -215,7 +215,7 @@ export function InflationCalculatorEnhanced() {
                 value={toDate}
                 onChange={setToDate}
                 minDate="2020-01-01"
-                maxDate="2024-11-30"
+                maxDate="2025-12-31"
                 autoOpen={autoOpenToDate}
                 onOpen={() => setAutoOpenToDate(false)}
                 tooltip="¿A qué fecha quieres ajustar? Por ejemplo, hoy para ver cuánto vale ahora ese dinero."
