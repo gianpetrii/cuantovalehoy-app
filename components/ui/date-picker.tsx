@@ -32,13 +32,16 @@ export function DatePicker({
   value,
   onChange,
   minDate = "2020-01-01",
-  maxDate = "2025-12-31",
+  maxDate,
   tooltip,
   error,
   className,
 }: DatePickerProps) {
   // Estado para el mes/año que se está viendo
   const today = new Date();
+  const currentYear = today.getFullYear();
+  const defaultMaxDate = `${currentYear}-12-31`;
+  const effectiveMaxDate = maxDate || defaultMaxDate;
   const initialDate = value ? new Date(value + "T00:00:00") : today;
   
   const [viewYear, setViewYear] = React.useState(initialDate.getFullYear());
@@ -60,7 +63,7 @@ export function DatePicker({
   };
 
   const minDateParsed = parseDate(minDate);
-  const maxDateParsed = parseDate(maxDate);
+  const maxDateParsed = parseDate(effectiveMaxDate);
 
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -189,19 +192,47 @@ export function DatePicker({
               onClick={(e) => e.stopPropagation()}
             >
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 gap-2">
             <Button
               type="button"
               variant="outline"
               size="icon"
               onClick={handlePrevMonth}
               disabled={!canGoPrev}
-              className="h-8 w-8"
+              className="h-8 w-8 flex-shrink-0"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="font-semibold text-sm">
-              {MONTHS[viewMonth]} {viewYear}
+            <div className="flex gap-2 flex-1">
+              <select
+                value={viewMonth}
+                onChange={(e) => setViewMonth(Number(e.target.value))}
+                className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {MONTHS.map((month, index) => (
+                  <option 
+                    key={index} 
+                    value={index}
+                    disabled={isMonthDisabled(viewYear, index)}
+                  >
+                    {month}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={viewYear}
+                onChange={(e) => setViewYear(Number(e.target.value))}
+                className="w-20 h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {Array.from(
+                  { length: maxDateParsed.year - minDateParsed.year + 1 },
+                  (_, i) => minDateParsed.year + i
+                ).map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
             </div>
             <Button
               type="button"
@@ -209,7 +240,7 @@ export function DatePicker({
               size="icon"
               onClick={handleNextMonth}
               disabled={!canGoNext}
-              className="h-8 w-8"
+              className="h-8 w-8 flex-shrink-0"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>

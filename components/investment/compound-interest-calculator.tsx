@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -10,12 +10,8 @@ import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { MetricCard } from "@/components/ui/metric-card";
 import { CompoundInterestChart } from "@/components/charts/compound-interest-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { DatePicker } from "@/components/ui/date-picker";
-import {
-  calculateInflationAdjustment,
-  getAvailableDates,
-  formatCurrency,
-} from "@/lib/services/inflation-service";
+import { formatCurrency } from "@/lib/services/inflation-service";
+import { useInflationData } from "@/lib/hooks/use-inflation-data";
 import { Currency } from "@/types/inflation";
 import { TrendingUp, TrendingDown, DollarSign, Calculator, Percent, Calendar, PiggyBank } from "lucide-react";
 
@@ -54,11 +50,22 @@ export function CompoundInterestCalculator() {
   const [years, setYears] = useState<string>("5");
   const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly" | "annual">("monthly");
   const [compareInflation, setCompareInflation] = useState<boolean>(true);
-  const [startDate, setStartDate] = useState<string>("");
   const [result, setResult] = useState<CompoundInterestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const availableDates = getAvailableDates(currency);
+  
+  // Ref para scroll automático
+  const resultsRef = useRef<HTMLDivElement>(null);
+  
+  // Obtener datos desde Supabase
+  const { data: inflationData, isLoading } = useInflationData(currency);
+  
+  // Usar fecha actual como inicio
+  const getCurrentDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+  };
 
   const calculateCompoundInterest = () => {
     try {
@@ -129,10 +136,14 @@ export function CompoundInterestCalculator() {
         
         // Only add data points at sampling intervals or at the end
         if (i % samplingRate === 0 || i === totalPeriods) {
+          // Calcular el período en años (redondeado para mejor visualización)
+          const periodInYears = frequency === "daily" ? i / 365 : 
+                                frequency === "weekly" ? i / 52 :
+                                frequency === "monthly" ? i / 12 : i;
+          
           const dataPoint: any = {
-            period: frequency === "daily" ? i / 365 : 
-                    frequency === "weekly" ? i / 52 :
-                    frequency === "monthly" ? i / 12 : i,
+            period: Math.round(periodInYears * 10) / 10, // Redondear a 1 decimal
+            periodLabel: periodInYears >= 1 ? `Año ${Math.round(periodInYears)}` : `${Math.round(periodInYears * 12)} meses`,
             capital: totalContributed,
             interest: Math.max(0, interestEarned),
             total: currentAmount,
@@ -171,10 +182,11 @@ export function CompoundInterestCalculator() {
       const totalCapitalContributed = capital + (contributionPerPeriod * totalPeriods);
       const totalInterest = finalAmount - totalCapitalContributed;
 
-      // Compare with inflation if requested
-      let inflationData = undefined;
-      if (compareInflation && startDate) {
+      // Compare with inflation if requested (usando fecha actual)
+      let inflationComparisonData = undefined;
+      if (compareInflation && inflationData) {
         try {
+          const startDate = getCurrentDate();
           // Calculate end date
           const [startYear, startMonth] = startDate.split("-").map(Number);
           const endYear = startYear + Math.floor(numYears);
@@ -183,20 +195,21 @@ export function CompoundInterestCalculator() {
           const adjustedEndMonth = ((endMonth - 1) % 12) + 1;
           const endDate = `${adjustedEndYear}-${String(adjustedEndMonth).padStart(2, "0")}`;
 
-          const inflationResult = calculateInflationAdjustment({
-            amount: finalAmount,
-            fromDate: startDate,
-            toDate: endDate,
-            currency,
-          });
+          // Buscar datos de inflación
+          const fromData = inflationData.find(item => item.date === startDate);
+          const toData = inflationData.find(item => item.date === endDate);
 
-          const realGain = ((finalAmount - inflationResult.adjustedAmount) / inflationResult.adjustedAmount) * 100;
+          if (fromData && toData) {
+            const inflationRate = ((1 + toData.accumulated / 100) / (1 + fromData.accumulated / 100) - 1) * 100;
+            const inflationAdjustedAmount = finalAmount * (1 + inflationRate / 100);
+            const realGain = ((finalAmount - inflationAdjustedAmount) / inflationAdjustedAmount) * 100;
 
-          inflationData = {
-            inflationAdjustedAmount: inflationResult.adjustedAmount,
-            realGain,
-            beatsInflation: realGain > 0,
-          };
+            inflationComparisonData = {
+              inflationAdjustedAmount,
+              realGain,
+              beatsInflation: realGain > 0,
+            };
+          }
         } catch (err) {
           console.error("Error calculating inflation:", err);
         }
@@ -214,8 +227,13 @@ export function CompoundInterestCalculator() {
         hasVariance,
         pessimisticAmount: hasVariance ? pessimisticAmount : undefined,
         optimisticAmount: hasVariance ? optimisticAmount : undefined,
-        ...inflationData,
+        ...inflationComparisonData,
       });
+      
+      // Scroll automático a los resultados
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al calcular");
       setResult(null);
@@ -231,10 +249,8 @@ export function CompoundInterestCalculator() {
 
   const currencySymbol = currency === "ARS" ? "$" : "US$";
   const currencyName = currency === "ARS" ? "Pesos Argentinos" : "Dólares";
-  const periodLabel = 
-    frequency === "daily" ? "Día" :
-    frequency === "weekly" ? "Semana" :
-    frequency === "monthly" ? "Mes" : "Año";
+  // Siempre mostramos años en el gráfico, independiente de la frecuencia
+  const periodLabel = "Año";
 
   return (
     <div className="space-y-6">
@@ -355,7 +371,7 @@ export function CompoundInterestCalculator() {
 
           {/* Inflation Comparison */}
           <Card className="bg-muted/50">
-            <CardContent className="pt-6 space-y-4">
+            <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -367,19 +383,8 @@ export function CompoundInterestCalculator() {
                 <Label htmlFor="compareInflation" className="cursor-pointer">
                   Comparar con inflación
                 </Label>
-                <InfoTooltip content="Activa esto para ver si tu inversión realmente gana contra la inflación. Es fundamental para saber si estás ganando o perdiendo poder adquisitivo." />
+                <InfoTooltip content="Activa esto para ver si tu inversión realmente gana contra la inflación. Es fundamental para saber si estás ganando o perdiendo poder adquisitivo. Se calcula desde hoy." />
               </div>
-
-              {compareInflation && (
-                <DatePicker
-                  label="Fecha de Inicio de la Inversión"
-                  value={startDate}
-                  onChange={setStartDate}
-                  minDate="2020-01-01"
-                  maxDate="2025-12-31"
-                  tooltip="¿Cuándo empiezas a invertir? Esto se usa para calcular la inflación del período."
-                />
-              )}
             </CardContent>
           </Card>
 
@@ -398,7 +403,7 @@ export function CompoundInterestCalculator() {
 
       {/* Results Section */}
       {result && (
-        <div className="space-y-6">
+        <div ref={resultsRef} className="space-y-6 scroll-mt-6">
           <h2 className="text-2xl font-bold">Proyección de tu Inversión</h2>
 
           {/* Metric Cards */}

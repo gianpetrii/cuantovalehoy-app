@@ -51,10 +51,29 @@ export function CompoundInterestChart({
   className,
 }: CompoundInterestChartProps) {
   const formatValue = (value: number) => {
+    // Formato compacto para valores grandes
+    if (value >= 1000000) {
+      return `${currency}${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+      return `${currency}${(value / 1000).toFixed(0)}k`;
+    }
     return `${currency}${value.toLocaleString("es-AR", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     })}`;
+  };
+  
+  const formatFullValue = (value: number) => {
+    return `${currency}${value.toLocaleString("es-AR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  };
+  
+  const formatPeriod = (value: number) => {
+    // Mostrar solo números enteros en el eje X
+    return Number.isInteger(value) ? value.toString() : '';
   };
 
   const hasVarianceData = data.some(d => d.pessimistic !== undefined || d.optimistic !== undefined);
@@ -71,24 +90,30 @@ export function CompoundInterestChart({
         </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={400}>
           {hasVarianceData ? (
-            <LineChart data={data}>
+            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
                 dataKey="period"
                 label={{
                   value: periodLabel,
                   position: "insideBottom",
-                  offset: -5,
+                  offset: -10,
                 }}
+                tickFormatter={formatPeriod}
                 className="text-xs"
                 stroke="currentColor"
+                domain={['dataMin', 'dataMax']}
+                type="number"
+                allowDecimals={false}
+                height={60}
               />
               <YAxis
                 tickFormatter={formatValue}
                 className="text-xs"
                 stroke="currentColor"
+                width={80}
               />
               <Tooltip
                 formatter={(value: number, name: string) => {
@@ -97,7 +122,7 @@ export function CompoundInterestChart({
                     total: "Escenario Normal",
                     optimistic: "Escenario Optimista",
                   };
-                  return [formatValue(value), labels[name] || name];
+                  return [formatFullValue(value), labels[name] || name];
                 }}
                 labelFormatter={(label) => `${periodLabel} ${label}`}
                 contentStyle={{
@@ -136,7 +161,7 @@ export function CompoundInterestChart({
               <Line
                 type="monotone"
                 dataKey="optimistic"
-                stroke="hsl(var(--green-chart))"
+                stroke="hsl(var(--chart-2))"
                 strokeWidth={2}
                 dot={false}
                 name="optimistic"
@@ -144,7 +169,7 @@ export function CompoundInterestChart({
               />
             </LineChart>
           ) : (
-            <AreaChart data={data}>
+            <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
               <defs>
                 <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
                   <stop
@@ -177,19 +202,25 @@ export function CompoundInterestChart({
                 label={{
                   value: periodLabel,
                   position: "insideBottom",
-                  offset: -5,
+                  offset: -10,
                 }}
+                tickFormatter={formatPeriod}
                 className="text-xs"
                 stroke="currentColor"
+                domain={['dataMin', 'dataMax']}
+                type="number"
+                allowDecimals={false}
+                height={60}
               />
               <YAxis
                 tickFormatter={formatValue}
                 className="text-xs"
                 stroke="currentColor"
+                width={80}
               />
               <Tooltip
                 formatter={(value: number, name: string) => [
-                  formatValue(value),
+                  formatFullValue(value),
                   name === "capital" ? "Capital" : "Intereses",
                 ]}
                 labelFormatter={(label) => `${periodLabel} ${label}`}
@@ -230,19 +261,19 @@ export function CompoundInterestChart({
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Pesimista</p>
               <p className="text-lg font-bold text-destructive">
-                {formatValue(data[data.length - 1]?.pessimistic || 0)}
+                {formatFullValue(data[data.length - 1]?.pessimistic || 0)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Normal</p>
               <p className="text-lg font-bold text-primary">
-                {formatValue(data[data.length - 1]?.total || 0)}
+                {formatFullValue(data[data.length - 1]?.total || 0)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Optimista</p>
               <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                {formatValue(data[data.length - 1]?.optimistic || 0)}
+                {formatFullValue(data[data.length - 1]?.optimistic || 0)}
               </p>
             </div>
           </div>
@@ -251,19 +282,19 @@ export function CompoundInterestChart({
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Capital Total</p>
               <p className="text-lg font-bold text-primary">
-                {formatValue(data[data.length - 1]?.capital || 0)}
+                {formatFullValue(data[data.length - 1]?.capital || 0)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Intereses</p>
               <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                {formatValue(data[data.length - 1]?.interest || 0)}
+                {formatFullValue(data[data.length - 1]?.interest || 0)}
               </p>
             </div>
             <div className="text-center">
               <p className="text-sm text-muted-foreground">Total Final</p>
               <p className="text-lg font-bold">
-                {formatValue(data[data.length - 1]?.total || 0)}
+                {formatFullValue(data[data.length - 1]?.total || 0)}
               </p>
             </div>
           </div>

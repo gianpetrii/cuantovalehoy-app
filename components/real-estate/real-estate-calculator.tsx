@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -11,13 +11,8 @@ import { ResultComparison } from "@/components/ui/result-comparison";
 import { InflationTimelineChart } from "@/components/charts/inflation-timeline-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { DatePicker } from "@/components/ui/date-picker";
-import {
-  calculateInflationAdjustment,
-  getAvailableDates,
-  formatDateDisplay,
-  formatCurrency,
-  getInflationData,
-} from "@/lib/services/inflation-service";
+import { formatDateDisplay, formatCurrency } from "@/lib/services/inflation-service";
+import { useInflationData } from "@/lib/hooks/use-inflation-data";
 import { Currency } from "@/types/inflation";
 import { Home, Ruler, DollarSign, Calculator, TrendingUp, TrendingDown, Calendar } from "lucide-react";
 
@@ -42,12 +37,22 @@ export function RealEstateCalculator() {
   const [currentPrice, setCurrentPrice] = useState<string>("");
   const [result, setResult] = useState<RealEstateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Ref para scroll automático
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const availableDates = getAvailableDates(currency);
+  // Obtener datos desde Supabase
+  const { data: inflationData, isLoading } = useInflationData(currency);
+  const availableDates = inflationData?.map(item => item.date) || [];
 
   const handleCalculate = () => {
     try {
       setError(null);
+      
+      if (!inflationData) {
+        setError("Cargando datos...");
+        return;
+      }
       
       if (!price || !squareMeters || !fromDate || !toDate) {
         setError("Por favor completa todos los campos obligatorios");
@@ -72,29 +77,43 @@ export function RealEstateCalculator() {
         return;
       }
 
-      // Calculate inflation adjustment
-      const inflationResult = calculateInflationAdjustment({
-        amount: numPrice,
-        fromDate,
-        toDate,
-        currency,
-      });
+      // Convertir fechas de YYYY-MM-DD a YYYY-MM
+      const fromDateYM = fromDate.substring(0, 7);
+      const toDateYM = toDate.substring(0, 7);
+
+      // Buscar datos de inflación
+      const fromData = inflationData.find(item => item.date === fromDateYM);
+      const toData = inflationData.find(item => item.date === toDateYM);
+
+      if (!fromData || !toData) {
+        setError("No hay datos disponibles para el período seleccionado");
+        return;
+      }
+
+      // Calcular inflación
+      const inflationRate = ((1 + toData.accumulated / 100) / (1 + fromData.accumulated / 100) - 1) * 100;
+      const adjustedAmount = numPrice * (1 + inflationRate / 100);
 
       // Calculate price per square meter
       const originalPricePerSqm = numPrice / numSqm;
-      const adjustedPricePerSqm = inflationResult.adjustedAmount / numSqm;
+      const adjustedPricePerSqm = adjustedAmount / numSqm;
 
       setResult({
         originalPrice: numPrice,
         originalPricePerSqm,
-        adjustedPrice: inflationResult.adjustedAmount,
+        adjustedPrice: adjustedAmount,
         adjustedPricePerSqm,
-        inflationRate: inflationResult.inflationRate,
+        inflationRate,
         currency,
         fromDate,
         toDate,
         squareMeters: numSqm,
       });
+      
+      // Scroll automático a los resultados
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al calcular");
       setResult(null);
@@ -219,7 +238,6 @@ export function RealEstateCalculator() {
               value={fromDate}
               onChange={setFromDate}
               minDate="2020-01-01"
-              maxDate="2025-12-31"
               tooltip="¿Cuándo compraste o valuaste el inmueble? Esta será la fecha de referencia."
             />
 
@@ -228,7 +246,6 @@ export function RealEstateCalculator() {
               value={toDate}
               onChange={setToDate}
               minDate="2020-01-01"
-              maxDate="2025-12-31"
               tooltip="¿A qué fecha quieres comparar? Por ejemplo, hoy para ver cuánto debería valer."
             />
           </div>
@@ -248,7 +265,7 @@ export function RealEstateCalculator() {
 
       {/* Results Section */}
       {result && (
-        <div className="space-y-6">
+        <div ref={resultsRef} className="space-y-6 scroll-mt-6">
           <h2 className="text-2xl font-bold">Análisis del Inmueble</h2>
 
           {/* Metric Cards */}

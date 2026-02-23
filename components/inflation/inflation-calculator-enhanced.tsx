@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -13,14 +13,8 @@ import { ComparisonBarChart } from "@/components/charts/comparison-bar-chart";
 import { InflationGauge } from "@/components/charts/inflation-gauge";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { DatePicker } from "@/components/ui/date-picker";
-import {
-  calculateInflationAdjustment,
-  getAvailableDates,
-  formatDateDisplay,
-  formatCurrency,
-  getInflationData,
-  calculateDollarizationComparison,
-} from "@/lib/services/inflation-service";
+import { formatDateDisplay, formatCurrency } from "@/lib/services/inflation-service";
+import { useInflationData, useExchangeRates } from "@/lib/hooks/use-inflation-data";
 import { Currency, CalculationResult } from "@/types/inflation";
 import { TrendingUp, Calculator, DollarSign, Calendar, Flame, ArrowRightLeft } from "lucide-react";
 
@@ -34,8 +28,15 @@ export function InflationCalculatorEnhanced() {
   const [dollarizationResult, setDollarizationResult] = useState<any>(null);
   const [showDollarization, setShowDollarization] = useState(true);
   const [autoOpenToDate, setAutoOpenToDate] = useState(false);
+  
+  // Ref para scroll automático
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const availableDates = getAvailableDates(currency);
+  // Obtener datos desde Supabase
+  const { data: inflationData, isLoading: inflationLoading } = useInflationData(currency);
+  const { data: exchangeRates, isLoading: exchangeLoading } = useExchangeRates();
+  
+  const availableDates = inflationData?.map(item => item.date) || [];
   
   // Calcular días entre fechas
   const daysBetween = fromDate && toDate ? 
@@ -44,6 +45,11 @@ export function InflationCalculatorEnhanced() {
   const handleCalculate = () => {
     try {
       setError(null);
+      
+      if (!inflationData || !exchangeRates) {
+        setError("Cargando datos...");
+        return;
+      }
       
       if (!amount || !fromDate || !toDate) {
         setError("Por favor completa todos los campos");
@@ -61,29 +67,56 @@ export function InflationCalculatorEnhanced() {
         return;
       }
 
-      // Convertir fechas de YYYY-MM-DD a YYYY-MM para el servicio
-      const fromDateYM = fromDate.substring(0, 7); // "2024-01-15" -> "2024-01"
+      // Convertir fechas de YYYY-MM-DD a YYYY-MM
+      const fromDateYM = fromDate.substring(0, 7);
       const toDateYM = toDate.substring(0, 7);
 
-      const calculationResult = calculateInflationAdjustment({
-        amount: numAmount,
+      // Buscar datos de inflación
+      const fromData = inflationData.find(item => item.date === fromDateYM);
+      const toData = inflationData.find(item => item.date === toDateYM);
+
+      if (!fromData || !toData) {
+        setError("No hay datos disponibles para el período seleccionado");
+        return;
+      }
+
+      // Calcular inflación
+      const inflationRate = ((1 + toData.accumulated / 100) / (1 + fromData.accumulated / 100) - 1) * 100;
+      const adjustedAmount = numAmount * (1 + inflationRate / 100);
+
+      const calculationResult: CalculationResult = {
+        originalAmount: numAmount,
+        adjustedAmount,
+        inflationRate,
         fromDate: fromDateYM,
         toDate: toDateYM,
         currency,
-      });
+      };
 
       setResult(calculationResult);
 
-      // Si es ARS, calcular también la comparación con dolarización
+      // Si es ARS, calcular comparación con dolarización
       if (currency === "ARS" && showDollarization) {
         try {
-          const dollarComparison = calculateDollarizationComparison(
-            numAmount,
-            fromDateYM,
-            toDateYM,
-            "blue"
-          );
-          setDollarizationResult(dollarComparison);
+          const fromRate = exchangeRates.find(item => item.date === fromDateYM);
+          const toRate = exchangeRates.find(item => item.date === toDateYM);
+
+          if (fromRate && toRate) {
+            const dollarAmount = numAmount / fromRate.blue;
+            const finalUSD = dollarAmount * toRate.blue;
+            const difference = finalUSD - adjustedAmount;
+            const percentageDifference = (difference / adjustedAmount) * 100;
+
+            setDollarizationResult({
+              arsAmount: numAmount,
+              dollarAmount,
+              finalARS: adjustedAmount,
+              finalUSD,
+              difference,
+              percentageDifference,
+              wasBetter: finalUSD > adjustedAmount ? "USD" : "ARS",
+            });
+          }
         } catch (err) {
           console.error("Error calculating dollarization:", err);
           setDollarizationResult(null);
@@ -91,6 +124,11 @@ export function InflationCalculatorEnhanced() {
       } else {
         setDollarizationResult(null);
       }
+      
+      // Scroll automático a los resultados
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al calcular");
       setResult(null);
@@ -108,9 +146,8 @@ export function InflationCalculatorEnhanced() {
 
   // Generate timeline data for chart
   const getTimelineData = () => {
-    if (!result) return [];
+    if (!result || !inflationData) return [];
 
-    const inflationData = getInflationData(result.currency);
     const fromIndex = inflationData.findIndex(d => d.date === result.fromDate);
     const toIndex = inflationData.findIndex(d => d.date === result.toDate);
 
@@ -206,7 +243,6 @@ export function InflationCalculatorEnhanced() {
                 }}
                 onOpen={() => setAutoOpenToDate(false)}
                 minDate="2020-01-01"
-                maxDate="2025-12-31"
                 tooltip="¿Cuándo tenías ese dinero? Selecciona el día, mes y año en el pasado."
               />
 
@@ -215,7 +251,6 @@ export function InflationCalculatorEnhanced() {
                 value={toDate}
                 onChange={setToDate}
                 minDate="2020-01-01"
-                maxDate="2025-12-31"
                 autoOpen={autoOpenToDate}
                 onOpen={() => setAutoOpenToDate(false)}
                 tooltip="¿A qué fecha quieres ajustar? Por ejemplo, hoy para ver cuánto vale ahora ese dinero."
@@ -249,7 +284,7 @@ export function InflationCalculatorEnhanced() {
 
       {/* Results Section */}
       {result && (
-        <div className="space-y-6">
+        <div ref={resultsRef} className="space-y-6 scroll-mt-6">
           <h2 className="text-2xl font-bold">Resultados del Análisis</h2>
 
           {/* Metric Cards */}

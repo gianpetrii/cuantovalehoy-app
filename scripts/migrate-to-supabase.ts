@@ -1,49 +1,32 @@
-import {
-  InflationData,
-  ExchangeRateData,
-  CalculationInput,
-  CalculationResult,
-  ConversionInput,
-  ConversionResult,
-  Currency,
-} from "@/types/inflation";
-import { fetchInflationData, fetchExchangeRateData } from "./inflation-db";
-
 /**
- * Inflation Service
+ * Script para migrar datos de inflación hardcodeados a Supabase
  * 
- * This service provides inflation data and calculations for ARS and USD.
- * 
- * Data sources:
- * - ARS inflation: INDEC (Instituto Nacional de Estadística y Censos)
- * - USD inflation: US Bureau of Labor Statistics (CPI)
- * - Exchange rates: Banco Central de la República Argentina
- * 
- * APIs oficiales disponibles para integración:
- * 
- * 1. API de Series de Tiempo de Argentina (datos.gob.ar):
- *    - URL: http://apis.datos.gob.ar/series/
- *    - Datos desde 2016, más de 30,000 series de tiempo
- *    - Ejemplo serie IPC: 101.1_I2NG_2016_M_22
- *    - Formato: JSON, CSV
- * 
- * 2. API del BCRA (Principales Variables v4.0):
- *    - URL: https://www.bcra.gob.ar/BCRAyVos/catalogo-de-APIs-banco-central.asp
- *    - Series históricas completas de variables monetarias
- *    - Formato TXT estructurado
- * 
- * 3. Estadísticas BCRA (servicio independiente):
- *    - URL: https://estadisticasbcra.com/
- *    - API: https://api.estadisticasbcra.com/
- *    - Datos compilados del BCRA con endpoints simplificados
- * 
- * 4. Bluelytics (tipo de cambio):
- *    - URL: https://api.bluelytics.com.ar/
- *    - Cotizaciones dólar blue y oficial en tiempo real
+ * Uso:
+ * 1. Asegúrate de tener las variables de entorno configuradas en .env.local
+ * 2. Ejecuta las tablas en Supabase usando supabase/schema.sql
+ * 3. Ejecuta: npx tsx scripts/migrate-to-supabase.ts
  */
 
-// Mock data - In production, this should come from an API
-const ARS_INFLATION_DATA: InflationData[] = [
+import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Cargar variables de entorno
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('❌ Error: Faltan variables de entorno de Supabase');
+  console.error('Asegúrate de configurar NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en .env.local');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Datos de inflación ARS (copiados del servicio actual)
+const ARS_INFLATION_DATA = [
   // 2020
   { date: "2020-01", rate: 2.3, accumulated: 0 },
   { date: "2020-02", rate: 2.0, accumulated: 4.3 },
@@ -129,8 +112,7 @@ const ARS_INFLATION_DATA: InflationData[] = [
   { date: "2025-12", rate: 2.8, accumulated: 3408.0 },
 ];
 
-// USD Inflation data (US CPI)
-const USD_INFLATION_DATA: InflationData[] = [
+const USD_INFLATION_DATA = [
   // 2020
   { date: "2020-01", rate: 0.1, accumulated: 0 },
   { date: "2020-02", rate: 0.1, accumulated: 0.2 },
@@ -219,8 +201,7 @@ const USD_INFLATION_DATA: InflationData[] = [
   { date: "2026-01", rate: 0.2, accumulated: 23.6 },
 ];
 
-// Exchange rate data (ARS/USD)
-const EXCHANGE_RATE_DATA: ExchangeRateData[] = [
+const EXCHANGE_RATE_DATA = [
   // 2020
   { date: "2020-01", official: 60.0, blue: 80.0 },
   { date: "2020-02", official: 62.0, blue: 82.0 },
@@ -310,229 +291,75 @@ const EXCHANGE_RATE_DATA: ExchangeRateData[] = [
   { date: "2026-02", official: 1370.0, blue: 1440.0 },
 ];
 
-/**
- * Get inflation data for a specific currency
- */
-export function getInflationData(currency: Currency): InflationData[] {
-  return currency === "ARS" ? ARS_INFLATION_DATA : USD_INFLATION_DATA;
-}
+async function migrateInflationData() {
+  console.log('🚀 Iniciando migración de datos de inflación...\n');
 
-/**
- * Get inflation data for a specific date
- */
-export function getInflationForDate(
-  currency: Currency,
-  date: string
-): InflationData | null {
-  const data = getInflationData(currency);
-  return data.find((item) => item.date === date) || null;
-}
+  // Migrar datos ARS
+  console.log('📊 Migrando datos de inflación ARS...');
+  const arsRecords = ARS_INFLATION_DATA.map(item => ({
+    date: item.date,
+    currency: 'ARS',
+    rate: item.rate,
+    accumulated: item.accumulated,
+  }));
 
-/**
- * Get exchange rate for a specific date
- */
-export function getExchangeRate(date: string): ExchangeRateData | null {
-  return EXCHANGE_RATE_DATA.find((item) => item.date === date) || null;
-}
+  const { data: arsData, error: arsError } = await supabase
+    .from('inflation_data')
+    .upsert(arsRecords, { onConflict: 'date,currency' });
 
-/**
- * Calculate accumulated inflation between two dates
- */
-export function calculateAccumulatedInflation(
-  currency: Currency,
-  fromDate: string,
-  toDate: string
-): number {
-  const data = getInflationData(currency);
-  
-  const fromData = data.find((item) => item.date === fromDate);
-  const toData = data.find((item) => item.date === toDate);
-  
-  if (!fromData || !toData) {
-    throw new Error("Date not found in inflation data");
-  }
-  
-  // Calculate the accumulated inflation between the two dates
-  // Formula: ((1 + toAccumulated/100) / (1 + fromAccumulated/100) - 1) * 100
-  const fromMultiplier = 1 + fromData.accumulated / 100;
-  const toMultiplier = 1 + toData.accumulated / 100;
-  
-  return ((toMultiplier / fromMultiplier - 1) * 100);
-}
-
-/**
- * Calculate inflation-adjusted amount
- */
-export function calculateInflationAdjustment(
-  input: CalculationInput
-): CalculationResult {
-  const inflationRate = calculateAccumulatedInflation(
-    input.currency,
-    input.fromDate,
-    input.toDate
-  );
-  
-  const adjustedAmount = input.amount * (1 + inflationRate / 100);
-  
-  return {
-    originalAmount: input.amount,
-    adjustedAmount,
-    inflationRate,
-    fromDate: input.fromDate,
-    toDate: input.toDate,
-    currency: input.currency,
-  };
-}
-
-/**
- * Convert between currencies
- */
-export function convertCurrency(input: ConversionInput): ConversionResult {
-  const exchangeData = getExchangeRate(input.date);
-  
-  if (!exchangeData) {
-    throw new Error("Exchange rate not found for date");
-  }
-  
-  const rate =
-    input.exchangeRateType === "official"
-      ? exchangeData.official
-      : exchangeData.blue;
-  
-  let convertedAmount: number;
-  
-  if (input.fromCurrency === "ARS" && input.toCurrency === "USD") {
-    convertedAmount = input.amount / rate;
-  } else if (input.fromCurrency === "USD" && input.toCurrency === "ARS") {
-    convertedAmount = input.amount * rate;
+  if (arsError) {
+    console.error('❌ Error migrando datos ARS:', arsError);
   } else {
-    // Same currency
-    convertedAmount = input.amount;
+    console.log(`✅ ${arsRecords.length} registros ARS migrados correctamente`);
   }
-  
-  return {
-    originalAmount: input.amount,
-    convertedAmount,
-    exchangeRate: rate,
-    fromCurrency: input.fromCurrency,
-    toCurrency: input.toCurrency,
-    date: input.date,
-    exchangeRateType: input.exchangeRateType,
-  };
+
+  // Migrar datos USD
+  console.log('\n📊 Migrando datos de inflación USD...');
+  const usdRecords = USD_INFLATION_DATA.map(item => ({
+    date: item.date,
+    currency: 'USD',
+    rate: item.rate,
+    accumulated: item.accumulated,
+  }));
+
+  const { data: usdData, error: usdError } = await supabase
+    .from('inflation_data')
+    .upsert(usdRecords, { onConflict: 'date,currency' });
+
+  if (usdError) {
+    console.error('❌ Error migrando datos USD:', usdError);
+  } else {
+    console.log(`✅ ${usdRecords.length} registros USD migrados correctamente`);
+  }
+
+  // Migrar tipos de cambio
+  console.log('\n💱 Migrando datos de tipo de cambio...');
+  const exchangeRecords = EXCHANGE_RATE_DATA.map(item => ({
+    date: item.date,
+    official_rate: item.official,
+    blue_rate: item.blue,
+  }));
+
+  const { data: exchangeData, error: exchangeError } = await supabase
+    .from('exchange_rates')
+    .upsert(exchangeRecords, { onConflict: 'date' });
+
+  if (exchangeError) {
+    console.error('❌ Error migrando tipos de cambio:', exchangeError);
+  } else {
+    console.log(`✅ ${exchangeRecords.length} registros de tipo de cambio migrados correctamente`);
+  }
+
+  console.log('\n✨ Migración completada!');
 }
 
-/**
- * Get available date range for a currency
- */
-export function getAvailableDateRange(currency: Currency): {
-  minDate: string;
-  maxDate: string;
-} {
-  const data = getInflationData(currency);
-  return {
-    minDate: data[0].date,
-    maxDate: data[data.length - 1].date,
-  };
-}
-
-/**
- * Get all available dates for a currency
- */
-export function getAvailableDates(currency: Currency): string[] {
-  const data = getInflationData(currency);
-  return data.map((item) => item.date);
-}
-
-/**
- * Calculate what would happen if you dollarized (ARS to USD comparison)
- */
-export function calculateDollarizationComparison(
-  arsAmount: number,
-  fromDate: string,
-  toDate: string,
-  exchangeRateType: "official" | "blue" = "blue"
-) {
-  // 1. Convert ARS to USD at fromDate
-  const initialConversion = convertCurrency({
-    amount: arsAmount,
-    fromCurrency: "ARS",
-    toCurrency: "USD",
-    date: fromDate,
-    exchangeRateType,
+// Ejecutar migración
+migrateInflationData()
+  .then(() => {
+    console.log('\n🎉 Todos los datos fueron migrados exitosamente');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('\n💥 Error durante la migración:', error);
+    process.exit(1);
   });
-
-  // 2. Adjust USD by USD inflation
-  const usdInflationResult = calculateInflationAdjustment({
-    amount: initialConversion.convertedAmount,
-    fromDate,
-    toDate,
-    currency: "USD",
-  });
-
-  // 3. Convert back to ARS at toDate
-  const finalConversion = convertCurrency({
-    amount: usdInflationResult.adjustedAmount,
-    fromCurrency: "USD",
-    toCurrency: "ARS",
-    date: toDate,
-    exchangeRateType,
-  });
-
-  // 4. Calculate ARS inflation for comparison
-  const arsInflationResult = calculateInflationAdjustment({
-    amount: arsAmount,
-    fromDate,
-    toDate,
-    currency: "ARS",
-  });
-
-  const dollarizationGain =
-    ((finalConversion.convertedAmount - arsInflationResult.adjustedAmount) /
-      arsInflationResult.adjustedAmount) *
-    100;
-
-  return {
-    // Original
-    originalARS: arsAmount,
-    
-    // Dollarization path
-    initialUSD: initialConversion.convertedAmount,
-    initialExchangeRate: initialConversion.exchangeRate,
-    adjustedUSD: usdInflationResult.adjustedAmount,
-    usdInflation: usdInflationResult.inflationRate,
-    finalARS: finalConversion.convertedAmount,
-    finalExchangeRate: finalConversion.exchangeRate,
-    
-    // ARS path
-    adjustedARS: arsInflationResult.adjustedAmount,
-    arsInflation: arsInflationResult.inflationRate,
-    
-    // Comparison
-    dollarizationGain,
-    wasWorthIt: dollarizationGain > 0,
-  };
-}
-
-/**
- * Format date for display (YYYY-MM to Month Year)
- */
-export function formatDateDisplay(date: string): string {
-  const [year, month] = date.split("-");
-  const monthNames = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-  ];
-  return `${monthNames[parseInt(month) - 1]} ${year}`;
-}
-
-/**
- * Format currency amount
- */
-export function formatCurrency(amount: number, currency: Currency): string {
-  const symbol = currency === "ARS" ? "$" : "US$";
-  return `${symbol} ${amount.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
