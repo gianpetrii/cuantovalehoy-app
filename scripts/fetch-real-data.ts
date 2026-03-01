@@ -118,6 +118,7 @@ async function fetchUSDInflation(): Promise<InflationDataPoint[]> {
     const inflationData: InflationDataPoint[] = [];
     let accumulatedMultiplier = 1;
     let previousValue: number | null = null;
+    let previousDate: string | null = null;
     
     for (const point of sortedData) {
       const month = point.period.replace('M', '').padStart(2, '0');
@@ -125,6 +126,46 @@ async function fetchUSDInflation(): Promise<InflationDataPoint[]> {
       const currentValue = parseFloat(point.value);
       
       if (isNaN(currentValue)) continue;
+      
+      // Detectar gaps (meses faltantes) y llenar con interpolación
+      if (previousDate && previousValue !== null) {
+        const prevYear = parseInt(previousDate.split('-')[0]);
+        const prevMonth = parseInt(previousDate.split('-')[1]);
+        const currYear = parseInt(date.split('-')[0]);
+        const currMonth = parseInt(date.split('-')[1]);
+        
+        const monthsDiff = (currYear - prevYear) * 12 + (currMonth - prevMonth);
+        
+        // Si hay más de 1 mes de diferencia, interpolar
+        if (monthsDiff > 1) {
+          console.log(`⚠️  Gap detectado entre ${previousDate} y ${date}, interpolando ${monthsDiff - 1} mes(es)`);
+          
+          // Calcular cambio total y distribuirlo
+          const totalChange = ((currentValue - previousValue) / previousValue) * 100;
+          const avgMonthlyChange = totalChange / monthsDiff;
+          
+          // Llenar los meses faltantes
+          for (let i = 1; i < monthsDiff; i++) {
+            let gapYear = prevYear;
+            let gapMonth = prevMonth + i;
+            
+            if (gapMonth > 12) {
+              gapYear += Math.floor((gapMonth - 1) / 12);
+              gapMonth = ((gapMonth - 1) % 12) + 1;
+            }
+            
+            const gapDate = `${gapYear}-${String(gapMonth).padStart(2, '0')}`;
+            accumulatedMultiplier = accumulatedMultiplier * (1 + avgMonthlyChange / 100);
+            const accumulated = (accumulatedMultiplier - 1) * 100;
+            
+            inflationData.push({
+              date: gapDate,
+              rate: Math.round(avgMonthlyChange * 100) / 100,
+              accumulated: Math.round(accumulated * 100) / 100,
+            });
+          }
+        }
+      }
       
       // Calcular cambio mensual comparando con el mes anterior
       let monthlyChangePercent = 0;
@@ -145,6 +186,7 @@ async function fetchUSDInflation(): Promise<InflationDataPoint[]> {
       });
       
       previousValue = currentValue;
+      previousDate = date;
     }
     
     console.log(`✅ ${inflationData.length} registros USD obtenidos`);

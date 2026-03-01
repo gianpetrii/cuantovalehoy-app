@@ -129,11 +129,19 @@ async function autoUpdate() {
   if (hasNewARS || hasNewUSD) {
     console.log('\n🔄 Ejecutando actualización automática...');
     
-    // Importar y ejecutar el script de actualización
-    const { execSync } = require('child_process');
-    execSync('npx tsx scripts/fetch-real-data.ts', { stdio: 'inherit' });
-    
-    return true;
+    try {
+      // Importar y ejecutar el script de actualización
+      const { execSync } = require('child_process');
+      execSync('npx tsx scripts/fetch-real-data.ts', { 
+        stdio: 'inherit',
+        env: process.env 
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Error ejecutando actualización:', error);
+      throw error;
+    }
   }
   
   return false;
