@@ -11,7 +11,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { ResultComparison } from "@/components/ui/result-comparison";
 import { InflationTimelineChart } from "@/components/charts/inflation-timeline-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { DatePicker } from "@/components/ui/date-picker";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { formatDateDisplay, formatCurrency } from "@/lib/services/inflation-service";
 import { useInflationData } from "@/lib/hooks/use-inflation-data";
 import { Currency } from "@/types/inflation";
@@ -78,9 +78,9 @@ export function RealEstateCalculator() {
         return;
       }
 
-      // Convertir fechas de YYYY-MM-DD a YYYY-MM
-      const fromDateYM = fromDate.substring(0, 7);
-      const toDateYM = toDate.substring(0, 7);
+      // Las fechas ya vienen en formato YYYY-MM
+      const fromDateYM = fromDate;
+      const toDateYM = toDate;
 
       // Buscar datos de inflación
       const fromData = inflationData.find(item => item.date === fromDateYM);
@@ -234,20 +234,20 @@ export function RealEstateCalculator() {
 
           {/* Date Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <DatePicker
-              label="Fecha de Compra/Valuación"
+            <MonthYearPicker
+              label="Mes de Compra/Valuación"
               value={fromDate}
               onChange={setFromDate}
-              minDate="2020-01-01"
-              tooltip="¿Cuándo compraste o valuaste el inmueble? Esta será la fecha de referencia."
+              minDate="2020-01"
+              tooltip="¿En qué mes compraste o valuaste el inmueble? Esta será la fecha de referencia."
             />
 
-            <DatePicker
-              label="Fecha de Comparación"
+            <MonthYearPicker
+              label="Mes de Comparación"
               value={toDate}
               onChange={setToDate}
-              minDate="2020-01-01"
-              tooltip="¿A qué fecha quieres comparar? Por ejemplo, hoy para ver cuánto debería valer."
+              minDate="2020-01"
+              tooltip="¿A qué mes quieres comparar? Por ejemplo, el mes actual para ver cuánto debería valer."
             />
           </div>
 

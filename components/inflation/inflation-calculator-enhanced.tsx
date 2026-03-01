@@ -12,7 +12,7 @@ import { InflationTimelineChart } from "@/components/charts/inflation-timeline-c
 import { ComparisonBarChart } from "@/components/charts/comparison-bar-chart";
 import { InflationGauge } from "@/components/charts/inflation-gauge";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { DatePicker } from "@/components/ui/date-picker";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { formatDateDisplay, formatCurrency } from "@/lib/services/inflation-service";
 import { useInflationData, useExchangeRates } from "@/lib/hooks/use-inflation-data";
 import { Currency, CalculationResult } from "@/types/inflation";
@@ -67,9 +67,9 @@ export function InflationCalculatorEnhanced() {
         return;
       }
 
-      // Convertir fechas de YYYY-MM-DD a YYYY-MM
-      const fromDateYM = fromDate.substring(0, 7);
-      const toDateYM = toDate.substring(0, 7);
+      // Las fechas ya vienen en formato YYYY-MM
+      const fromDateYM = fromDate;
+      const toDateYM = toDate;
 
       // Buscar datos de inflación
       const fromData = inflationData.find(item => item.date === fromDateYM);
@@ -234,26 +234,20 @@ export function InflationCalculatorEnhanced() {
           {/* Date Selection */}
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <DatePicker
-                label="Fecha de Origen"
+              <MonthYearPicker
+                label="Mes de Origen"
                 value={fromDate}
-                onChange={(newDate) => {
-                  setFromDate(newDate);
-                  setAutoOpenToDate(true);
-                }}
-                onOpen={() => setAutoOpenToDate(false)}
-                minDate="2020-01-01"
-                tooltip="¿Cuándo tenías ese dinero? Selecciona el día, mes y año en el pasado."
+                onChange={setFromDate}
+                minDate="2020-01"
+                tooltip="¿En qué mes tenías ese dinero? Los datos de inflación se publican mensualmente."
               />
 
-              <DatePicker
-                label="Fecha de Destino"
+              <MonthYearPicker
+                label="Mes de Destino"
                 value={toDate}
                 onChange={setToDate}
-                minDate="2020-01-01"
-                autoOpen={autoOpenToDate}
-                onOpen={() => setAutoOpenToDate(false)}
-                tooltip="¿A qué fecha quieres ajustar? Por ejemplo, hoy para ver cuánto vale ahora ese dinero."
+                minDate="2020-01"
+                tooltip="¿A qué mes quieres ajustar? Por ejemplo, el mes actual para ver cuánto vale ahora ese dinero."
               />
             </div>
             
