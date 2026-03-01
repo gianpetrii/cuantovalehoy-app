@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { NumericInput } from "@/components/ui/numeric-input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ResultComparison } from "@/components/ui/result-comparison";
 import { InflationTimelineChart } from "@/components/charts/inflation-timeline-chart";
@@ -218,15 +219,15 @@ export function RealEstateCalculator() {
               tooltip={`¿Cuánto pagaste por el inmueble o cuánto lo valuaste? Ingresa el precio total en ${currencyName}.`}
             />
 
-            <NumericInput
-              label="Metros Cuadrados"
+            <InputWithIcon
+              label="Metros Cuadrados (m²)"
               icon={Ruler}
+              type="number"
               placeholder="50"
               value={squareMeters}
-              onChange={setSquareMeters}
-              min={0}
-              decimals={2}
-              suffix="m²"
+              onChange={(e) => setSquareMeters(e.target.value)}
+              step="0.01"
+              min="0"
               tooltip="¿Cuántos metros cuadrados tiene la propiedad? Esto nos permite normalizar el valor para comparar correctamente."
             />
           </div>
