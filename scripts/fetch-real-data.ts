@@ -4,7 +4,21 @@
  * Fuentes:
  * - ARS: API de Series de Tiempo (datos.gob.ar) - INDEC oficial
  * - USD: Bureau of Labor Statistics API - BLS oficial
- * - Tipo de cambio: Bluelytics API
+ * - Tipo de cambio: DolarAPI + datos históricos
+ * 
+ * Modos de ejecución:
+ * 
+ * 1. Actualización incremental (por defecto):
+ *    npx tsx scripts/fetch-real-data.ts
+ *    - Usa UPSERT para actualizar/insertar solo datos nuevos
+ *    - No elimina datos existentes
+ *    - Ideal para ejecución diaria automática
+ * 
+ * 2. Recarga completa (solo para migración/corrección):
+ *    CLEAR_DATABASE=true npx tsx scripts/fetch-real-data.ts
+ *    - Limpia toda la BD antes de insertar
+ *    - Recarga todos los datos desde las APIs
+ *    - Usar solo cuando sea necesario corregir datos
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -409,11 +423,18 @@ async function main() {
   console.log('🚀 Obteniendo datos REALES de APIs oficiales\n');
   console.log('=' .repeat(60));
   
+  // Verificar si se debe limpiar la BD (solo en desarrollo/migración inicial)
+  const shouldClear = process.env.CLEAR_DATABASE === 'true';
+  
   try {
-    // 1. Limpiar base de datos
-    await clearDatabase();
-    
-    console.log('\n' + '='.repeat(60));
+    // 1. Limpiar base de datos (solo si se especifica)
+    if (shouldClear) {
+      await clearDatabase();
+      console.log('\n' + '='.repeat(60));
+    } else {
+      console.log('\n⚡ Modo actualización incremental (sin limpiar BD)');
+      console.log('=' .repeat(60));
+    }
     
     // 2. Obtener datos ARS
     const arsData = await fetchARSInflation();
