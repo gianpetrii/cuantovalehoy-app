@@ -122,27 +122,37 @@ export function MonthYearPicker({
             {/* Picker */}
             <div className="absolute z-50 mt-2 w-full rounded-md border bg-popover p-4 shadow-md">
               {/* Year navigation */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   onClick={handlePrevYear}
                   disabled={!canGoPrev}
-                  className="h-8 w-8"
+                  className="h-8 w-8 flex-shrink-0"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="text-sm font-semibold">
-                  {viewYear}
-                </div>
+                <input
+                  type="number"
+                  value={viewYear}
+                  onChange={(e) => {
+                    const newYear = parseInt(e.target.value);
+                    if (!isNaN(newYear) && newYear >= minYear && newYear <= maxYear) {
+                      setViewYear(newYear);
+                    }
+                  }}
+                  min={minYear}
+                  max={maxYear}
+                  className="flex-1 h-8 text-center text-sm font-semibold rounded-md border border-input bg-background px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   onClick={handleNextYear}
                   disabled={!canGoNext}
-                  className="h-8 w-8"
+                  className="h-8 w-8 flex-shrink-0"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
