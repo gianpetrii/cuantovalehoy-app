@@ -242,7 +242,6 @@ export function CompoundInterestCalculator() {
 
   const handleCurrencyChange = (newCurrency: Currency) => {
     setCurrency(newCurrency);
-    setStartDate("");
     setResult(null);
     setError(null);
   };
