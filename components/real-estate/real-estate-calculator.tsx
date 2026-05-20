@@ -131,9 +131,8 @@ export function RealEstateCalculator() {
 
   // Generate timeline data for price per sqm
   const getTimelineData = () => {
-    if (!result) return [];
+    if (!result || !inflationData) return [];
 
-    const inflationData = getInflationData(result.currency);
     const fromIndex = inflationData.findIndex(d => d.date === result.fromDate);
     const toIndex = inflationData.findIndex(d => d.date === result.toDate);
 
