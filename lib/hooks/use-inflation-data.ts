@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Currency } from "@/types/inflation";
 import { fetchInflationData, fetchExchangeRateData } from "@/lib/services/inflation-db";
+import {
+  calculateAnnualInflationRate,
+  calculateAnnualDevaluationRate,
+} from "@/lib/utils/inflation-projection";
 
 /**
  * Hook para obtener datos de inflación
@@ -35,5 +39,43 @@ export function useAvailableDates(currency: Currency) {
   return {
     ...rest,
     data: inflationData?.map(item => item.date) || [],
+  };
+}
+
+/**
+ * Hook para obtener tasas anuales proyectadas de inflación y devaluación
+ */
+export function useProjectedInflationRates(currency: Currency) {
+  const { data: inflationData, isLoading: inflationLoading } =
+    useInflationData(currency);
+  const { data: arsInflationData, isLoading: arsLoading } =
+    useInflationData("ARS");
+  const { data: usdInflationData, isLoading: usdLoading } =
+    useInflationData("USD");
+  const { data: exchangeRates, isLoading: exchangeLoading } =
+    useExchangeRates();
+
+  const arsAnnualRate = arsInflationData
+    ? calculateAnnualInflationRate(arsInflationData)
+    : 0;
+  const usdAnnualRate = usdInflationData
+    ? calculateAnnualInflationRate(usdInflationData)
+    : 0;
+  const devaluationRate = exchangeRates
+    ? calculateAnnualDevaluationRate(exchangeRates, "blue")
+    : 0;
+
+  const currencyAnnualRate =
+    currency === "ARS" ? arsAnnualRate : usdAnnualRate;
+
+  return {
+    arsAnnualRate,
+    usdAnnualRate,
+    devaluationRate,
+    currencyAnnualRate,
+    inflationData,
+    exchangeRates,
+    isLoading:
+      inflationLoading || arsLoading || usdLoading || exchangeLoading,
   };
 }

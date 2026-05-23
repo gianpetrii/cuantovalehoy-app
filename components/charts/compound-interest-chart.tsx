@@ -78,6 +78,24 @@ export function CompoundInterestChart({
 
   const hasVarianceData = data.some(d => d.pessimistic !== undefined || d.optimistic !== undefined);
 
+  const chartMargin = hasVarianceData
+    ? { top: 40, right: 30, left: 20, bottom: 50 }
+    : { top: 40, right: 30, left: 20, bottom: 45 };
+
+  const xAxisLabel = {
+    value: periodLabel,
+    position: "bottom" as const,
+    offset: 0,
+    style: { fill: "hsl(var(--muted-foreground))", fontSize: 12 },
+  };
+
+  const legendProps = {
+    verticalAlign: "top" as const,
+    align: "center" as const,
+    wrapperStyle: { paddingBottom: 8 },
+    iconType: "line" as const,
+  };
+
   return (
     <Card className={className}>
       <CardHeader>
@@ -92,22 +110,29 @@ export function CompoundInterestChart({
       <CardContent>
         <ResponsiveContainer width="100%" height={400}>
           {hasVarianceData ? (
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+            <LineChart data={data} margin={chartMargin}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <Legend
+                {...legendProps}
+                formatter={(value) => {
+                  const labels: Record<string, string> = {
+                    pessimistic: "Escenario Pesimista",
+                    total: "Escenario Normal",
+                    optimistic: "Escenario Optimista",
+                  };
+                  return labels[value] || value;
+                }}
+              />
               <XAxis
                 dataKey="period"
-                label={{
-                  value: periodLabel,
-                  position: "insideBottom",
-                  offset: -10,
-                }}
+                label={xAxisLabel}
                 tickFormatter={formatPeriod}
                 className="text-xs"
                 stroke="currentColor"
                 domain={['dataMin', 'dataMax']}
                 type="number"
                 allowDecimals={false}
-                height={60}
+                tickMargin={8}
               />
               <YAxis
                 tickFormatter={formatValue}
@@ -129,16 +154,6 @@ export function CompoundInterestChart({
                   backgroundColor: "hsl(var(--background))",
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
-                }}
-              />
-              <Legend
-                formatter={(value) => {
-                  const labels: Record<string, string> = {
-                    pessimistic: "Escenario Pesimista",
-                    total: "Escenario Normal",
-                    optimistic: "Escenario Optimista",
-                  };
-                  return labels[value] || value;
                 }}
               />
               <Line
@@ -169,7 +184,7 @@ export function CompoundInterestChart({
               />
             </LineChart>
           ) : (
-            <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 25 }}>
+            <AreaChart data={data} margin={chartMargin}>
               <defs>
                 <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
                   <stop
@@ -197,20 +212,22 @@ export function CompoundInterestChart({
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <Legend
+                {...legendProps}
+                formatter={(value) =>
+                  value === "capital" ? "Capital Aportado" : "Intereses Ganados"
+                }
+              />
               <XAxis
                 dataKey="period"
-                label={{
-                  value: periodLabel,
-                  position: "insideBottom",
-                  offset: -10,
-                }}
+                label={xAxisLabel}
                 tickFormatter={formatPeriod}
                 className="text-xs"
                 stroke="currentColor"
                 domain={['dataMin', 'dataMax']}
                 type="number"
                 allowDecimals={false}
-                height={60}
+                tickMargin={8}
               />
               <YAxis
                 tickFormatter={formatValue}
@@ -229,11 +246,6 @@ export function CompoundInterestChart({
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "0.5rem",
                 }}
-              />
-              <Legend
-                formatter={(value) =>
-                  value === "capital" ? "Capital Aportado" : "Intereses Ganados"
-                }
               />
               <Area
                 type="monotone"

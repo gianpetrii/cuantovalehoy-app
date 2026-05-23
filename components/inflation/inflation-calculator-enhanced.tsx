@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { CustomSelect, SelectItem } from "@/components/ui/custom-select";
 import { Label } from "@/components/ui/label";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -202,21 +202,16 @@ export function InflationCalculatorEnhanced() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Currency Selection */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="currency">Moneda</Label>
-              <InfoTooltip content="Elige la moneda en la que quieres calcular. ARS usa datos del INDEC, USD usa datos del CPI estadounidense." />
-            </div>
-            <Select
-              id="currency"
-              value={currency}
-              onChange={(e) => handleCurrencyChange(e.target.value as Currency)}
-              className="w-full"
-            >
-              <option value="ARS">💵 Peso Argentino (ARS)</option>
-              <option value="USD">💵 Dólar Estadounidense (USD)</option>
-            </Select>
-          </div>
+          <CustomSelect
+            label="Moneda"
+            tooltip="Elige la moneda en la que quieres calcular. ARS usa datos del INDEC, USD usa datos del CPI estadounidense."
+            value={currency}
+            onValueChange={(value) => handleCurrencyChange(value as Currency)}
+            id="currency"
+          >
+            <SelectItem value="ARS">💵 Peso Argentino (ARS)</SelectItem>
+            <SelectItem value="USD">💵 Dólar Estadounidense (USD)</SelectItem>
+          </CustomSelect>
 
           {/* Amount Input */}
           <NumericInput

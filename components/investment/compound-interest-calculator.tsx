@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { CustomSelect, SelectItem } from "@/components/ui/custom-select";
 import { Label } from "@/components/ui/label";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
@@ -11,18 +11,43 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { CompoundInterestChart } from "@/components/charts/compound-interest-chart";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { formatCurrency } from "@/lib/services/inflation-service";
-import { useInflationData } from "@/lib/hooks/use-inflation-data";
+import { useProjectedInflationRates } from "@/lib/hooks/use-inflation-data";
+import {
+  adjustForAnnualInflation,
+  calculateRealGainPercent,
+  getLatestExchangeRate,
+} from "@/lib/utils/inflation-projection";
 import { Currency } from "@/types/inflation";
 import { TrendingUp, TrendingDown, DollarSign, Calculator, Percent, Calendar, PiggyBank } from "lucide-react";
 
+type InflationComparisonMode = "local" | "usd-adjusted";
+
+interface InflationComparisonResult {
+  mode: InflationComparisonMode;
+  localInflationRate: number;
+  realValueLocal: number;
+  realGainLocal: number;
+  beatsInflationLocal: boolean;
+  usdInflationRate?: number;
+  devaluationRate?: number;
+  exchangeRateToday?: number;
+  finalUSD?: number;
+  realValueUSD?: number;
+  equivalentInitialUSD?: number;
+  realGainUSD?: number;
+  beatsInflationUSD?: boolean;
+}
+
 interface CompoundInterestResult {
   initialCapital: number;
+  totalContributed: number;
   finalCapital: number;
   totalInterest: number;
   totalAmount: number;
   periods: number;
   annualRate: number;
   currency: Currency;
+  years: number;
   chartData: Array<{
     period: number;
     capital: number;
@@ -31,14 +56,10 @@ interface CompoundInterestResult {
     pessimistic?: number;
     optimistic?: number;
   }>;
-  // Scenarios (when variance is used)
   hasVariance?: boolean;
   pessimisticAmount?: number;
   optimisticAmount?: number;
-  // Inflation comparison
-  inflationAdjustedAmount?: number;
-  realGain?: number;
-  beatsInflation?: boolean;
+  inflationComparison?: InflationComparisonResult;
 }
 
 export function CompoundInterestCalculator() {
@@ -50,22 +71,61 @@ export function CompoundInterestCalculator() {
   const [years, setYears] = useState<string>("5");
   const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly" | "annual">("monthly");
   const [compareInflation, setCompareInflation] = useState<boolean>(true);
+  const [inflationMode, setInflationMode] = useState<InflationComparisonMode>("local");
+  const [projectedInflationLocal, setProjectedInflationLocal] = useState<string>("");
+  const [projectedInflationUSD, setProjectedInflationUSD] = useState<string>("");
+  const [projectedDevaluation, setProjectedDevaluation] = useState<string>("");
+  const [ratesInitialized, setRatesInitialized] = useState(false);
   const [result, setResult] = useState<CompoundInterestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // Ref para scroll automático
   const resultsRef = useRef<HTMLDivElement>(null);
   
-  // Obtener datos desde Supabase
-  const { data: inflationData, isLoading } = useInflationData(currency);
-  
-  // Usar fecha actual como inicio
-  const getCurrentDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    return `${year}-${month}`;
-  };
+  const {
+    arsAnnualRate,
+    usdAnnualRate,
+    devaluationRate,
+    currencyAnnualRate,
+    exchangeRates,
+    isLoading: ratesLoading,
+  } = useProjectedInflationRates(currency);
+
+  // Inicializar tasas proyectadas desde datos históricos
+  useEffect(() => {
+    if (ratesLoading || ratesInitialized) return;
+
+    const localRate = currency === "ARS" ? arsAnnualRate : usdAnnualRate;
+    if (localRate > 0) {
+      setProjectedInflationLocal(localRate.toFixed(1));
+    }
+    if (usdAnnualRate > 0) {
+      setProjectedInflationUSD(usdAnnualRate.toFixed(1));
+    }
+    if (devaluationRate > 0) {
+      setProjectedDevaluation(devaluationRate.toFixed(1));
+    }
+    setRatesInitialized(true);
+  }, [
+    ratesLoading,
+    ratesInitialized,
+    arsAnnualRate,
+    usdAnnualRate,
+    devaluationRate,
+    currency,
+    currencyAnnualRate,
+  ]);
+
+  // Actualizar tasa local al cambiar moneda
+  useEffect(() => {
+    if (ratesLoading) return;
+    const localRate = currency === "ARS" ? arsAnnualRate : usdAnnualRate;
+    if (localRate > 0) {
+      setProjectedInflationLocal(localRate.toFixed(1));
+    }
+    if (currency === "USD") {
+      setInflationMode("local");
+    }
+  }, [currency, arsAnnualRate, usdAnnualRate, ratesLoading]);
 
   const calculateCompoundInterest = () => {
     try {
@@ -95,6 +155,29 @@ export function CompoundInterestCalculator() {
       if (isNaN(numYears) || numYears <= 0 || numYears > 50) {
         setError("Por favor ingresa un período entre 1 y 50 años");
         return;
+      }
+
+      if (compareInflation) {
+        const localRate = parseFloat(projectedInflationLocal);
+        if (isNaN(localRate) || localRate < 0) {
+          setError("Ingresá una tasa de inflación anual válida para la comparación");
+          return;
+        }
+        if (
+          currency === "ARS" &&
+          inflationMode === "usd-adjusted"
+        ) {
+          const usdRate = parseFloat(projectedInflationUSD);
+          const devalRate = parseFloat(projectedDevaluation);
+          if (isNaN(usdRate) || usdRate < 0) {
+            setError("Ingresá una tasa de inflación USD válida");
+            return;
+          }
+          if (isNaN(devalRate) || devalRate < 0) {
+            setError("Ingresá una tasa de devaluación válida");
+            return;
+          }
+        }
       }
 
       // Calculate compound interest with contributions
@@ -182,52 +265,95 @@ export function CompoundInterestCalculator() {
       const totalCapitalContributed = capital + (contributionPerPeriod * totalPeriods);
       const totalInterest = finalAmount - totalCapitalContributed;
 
-      // Compare with inflation if requested (usando fecha actual)
-      let inflationComparisonData = undefined;
-      if (compareInflation && inflationData) {
-        try {
-          const startDate = getCurrentDate();
-          // Calculate end date
-          const [startYear, startMonth] = startDate.split("-").map(Number);
-          const endYear = startYear + Math.floor(numYears);
-          const endMonth = startMonth + Math.round((numYears % 1) * 12);
-          const adjustedEndYear = endYear + Math.floor((endMonth - 1) / 12);
-          const adjustedEndMonth = ((endMonth - 1) % 12) + 1;
-          const endDate = `${adjustedEndYear}-${String(adjustedEndMonth).padStart(2, "0")}`;
+      let inflationComparison: InflationComparisonResult | undefined;
 
-          // Buscar datos de inflación
-          const fromData = inflationData.find(item => item.date === startDate);
-          const toData = inflationData.find(item => item.date === endDate);
+      if (compareInflation) {
+        const localRate = parseFloat(projectedInflationLocal);
+        const usdRate = parseFloat(projectedInflationUSD);
+        const devalRate = parseFloat(projectedDevaluation);
 
-          if (fromData && toData) {
-            const inflationRate = ((1 + toData.accumulated / 100) / (1 + fromData.accumulated / 100) - 1) * 100;
-            const inflationAdjustedAmount = finalAmount * (1 + inflationRate / 100);
-            const realGain = ((finalAmount - inflationAdjustedAmount) / inflationAdjustedAmount) * 100;
+        if (!isNaN(localRate) && localRate >= 0) {
+          const realValueLocal = adjustForAnnualInflation(
+            finalAmount,
+            localRate,
+            numYears
+          );
+          const realGainLocal = calculateRealGainPercent(
+            realValueLocal,
+            totalCapitalContributed
+          );
 
-            inflationComparisonData = {
-              inflationAdjustedAmount,
-              realGain,
-              beatsInflation: realGain > 0,
-            };
+          inflationComparison = {
+            mode: inflationMode,
+            localInflationRate: localRate,
+            realValueLocal,
+            realGainLocal,
+            beatsInflationLocal: realGainLocal > 0,
+          };
+
+          if (
+            currency === "ARS" &&
+            inflationMode === "usd-adjusted" &&
+            exchangeRates &&
+            exchangeRates.length > 0 &&
+            !isNaN(usdRate) &&
+            usdRate >= 0 &&
+            !isNaN(devalRate) &&
+            devalRate >= 0
+          ) {
+            const exchangeRateToday = getLatestExchangeRate(
+              exchangeRates,
+              "blue"
+            );
+
+            if (exchangeRateToday > 0) {
+              const futureExchangeRate =
+                exchangeRateToday *
+                Math.pow(1 + devalRate / 100, numYears);
+              const finalUSD = finalAmount / futureExchangeRate;
+              const realValueUSD = adjustForAnnualInflation(
+                finalUSD,
+                usdRate,
+                numYears
+              );
+              const equivalentInitialUSD =
+                totalCapitalContributed / exchangeRateToday;
+              const realGainUSD = calculateRealGainPercent(
+                realValueUSD,
+                equivalentInitialUSD
+              );
+
+              inflationComparison = {
+                ...inflationComparison,
+                usdInflationRate: usdRate,
+                devaluationRate: devalRate,
+                exchangeRateToday,
+                finalUSD,
+                realValueUSD,
+                equivalentInitialUSD,
+                realGainUSD,
+                beatsInflationUSD: realGainUSD > 0,
+              };
+            }
           }
-        } catch (err) {
-          console.error("Error calculating inflation:", err);
         }
       }
 
       setResult({
         initialCapital: capital,
+        totalContributed: totalCapitalContributed,
         finalCapital: totalCapitalContributed,
         totalInterest,
         totalAmount: finalAmount,
         periods: totalPeriods,
         annualRate: rate,
         currency,
+        years: numYears,
         chartData,
         hasVariance,
         pessimisticAmount: hasVariance ? pessimisticAmount : undefined,
         optimisticAmount: hasVariance ? optimisticAmount : undefined,
-        ...inflationComparisonData,
+        inflationComparison,
       });
       
       // Scroll automático a los resultados
@@ -265,21 +391,16 @@ export function CompoundInterestCalculator() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Currency Selection */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="currency">Moneda</Label>
-              <InfoTooltip content="Elige la moneda en la que invertirás. Esto afectará la comparación con inflación." />
-            </div>
-            <Select
-              id="currency"
-              value={currency}
-              onChange={(e) => handleCurrencyChange(e.target.value as Currency)}
-              className="w-full"
-            >
-              <option value="ARS">💵 Peso Argentino (ARS)</option>
-              <option value="USD">💵 Dólar Estadounidense (USD)</option>
-            </Select>
-          </div>
+          <CustomSelect
+            label="Moneda"
+            tooltip="Elige la moneda en la que invertirás. Esto afectará la comparación con inflación."
+            value={currency}
+            onValueChange={(value) => handleCurrencyChange(value as Currency)}
+            id="currency"
+          >
+            <SelectItem value="ARS">💵 Peso Argentino (ARS)</SelectItem>
+            <SelectItem value="USD">💵 Dólar Estadounidense (USD)</SelectItem>
+          </CustomSelect>
 
           {/* Investment Parameters */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -350,40 +471,142 @@ export function CompoundInterestCalculator() {
               tooltip="¿Por cuánto tiempo vas a invertir? Puedes usar decimales (ej: 2.5 años)."
             />
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="frequency">Frecuencia de Capitalización</Label>
-                <InfoTooltip content="¿Cada cuánto se agregan los intereses al capital? Cuanto más frecuente, mayor es la ganancia por el efecto del interés compuesto." />
-              </div>
-              <Select
-                id="frequency"
-                value={frequency}
-                onChange={(e) => setFrequency(e.target.value as "daily" | "weekly" | "monthly" | "annual")}
-              >
-                <option value="daily">📅 Diaria (máxima ganancia)</option>
-                <option value="weekly">📅 Semanal</option>
-                <option value="monthly">📅 Mensual</option>
-                <option value="annual">📅 Anual</option>
-              </Select>
-            </div>
+            <CustomSelect
+              label="Frecuencia de Capitalización"
+              tooltip="¿Cada cuánto se agregan los intereses al capital? Cuanto más frecuente, mayor es la ganancia por el efecto del interés compuesto."
+              value={frequency}
+              onValueChange={(value) => setFrequency(value as "daily" | "weekly" | "monthly" | "annual")}
+              id="frequency"
+            >
+              <SelectItem value="daily">📅 Diaria (máxima ganancia)</SelectItem>
+              <SelectItem value="weekly">📅 Semanal</SelectItem>
+              <SelectItem value="monthly">📅 Mensual</SelectItem>
+              <SelectItem value="annual">📅 Anual</SelectItem>
+            </CustomSelect>
           </div>
 
           {/* Inflation Comparison */}
           <Card className="bg-muted/50">
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-4">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="compareInflation"
                   checked={compareInflation}
                   onChange={(e) => setCompareInflation(e.target.checked)}
-                  className="h-4 w-4"
+                  className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
                 />
                 <Label htmlFor="compareInflation" className="cursor-pointer">
                   Comparar con inflación
                 </Label>
-                <InfoTooltip content="Activa esto para ver si tu inversión realmente gana contra la inflación. Es fundamental para saber si estás ganando o perdiendo poder adquisitivo. Se calcula desde hoy." />
+                <InfoTooltip content="Proyecta el poder adquisitivo real de tu inversión usando tasas anuales basadas en los últimos 12 meses. Podés editar las tasas según tu expectativa." />
               </div>
+
+              {compareInflation && (
+                <div className="space-y-4 pl-6 border-l-2 border-primary/30">
+                  {currency === "ARS" && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Modo de comparación</Label>
+                      <div className="space-y-2">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="inflationMode"
+                            value="local"
+                            checked={inflationMode === "local"}
+                            onChange={() => setInflationMode("local")}
+                            className="mt-1 h-4 w-4 accent-primary cursor-pointer"
+                          />
+                          <span className="text-sm">
+                            <strong>Inflación en pesos (ARS)</strong>
+                            <span className="block text-muted-foreground">
+                              ¿Cuánto valdrá tu inversión en poder adquisitivo real en pesos?
+                            </span>
+                          </span>
+                        </label>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="inflationMode"
+                            value="usd-adjusted"
+                            checked={inflationMode === "usd-adjusted"}
+                            onChange={() => setInflationMode("usd-adjusted")}
+                            className="mt-1 h-4 w-4 accent-primary cursor-pointer"
+                          />
+                          <span className="text-sm">
+                            <strong>Inflación en dólares + tipo de cambio</strong>
+                            <span className="block text-muted-foreground">
+                              Convierte a USD considerando devaluación del peso e inflación del dólar
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <InputWithIcon
+                      label={`Inflación anual proyectada (${currency === "ARS" ? "ARS" : "USD"})`}
+                      icon={Percent}
+                      type="number"
+                      placeholder="0"
+                      value={projectedInflationLocal}
+                      onChange={(e) => setProjectedInflationLocal(e.target.value)}
+                      step="0.1"
+                      min="0"
+                      max="1000"
+                      tooltip={
+                        ratesLoading
+                          ? "Cargando datos históricos..."
+                          : `Basado en los últimos 12 meses: ${currencyAnnualRate.toFixed(1)}% anual. Podés editarlo según tu expectativa.`
+                      }
+                    />
+
+                    {currency === "ARS" && inflationMode === "usd-adjusted" && (
+                      <>
+                        <InputWithIcon
+                          label="Inflación anual proyectada (USD)"
+                          icon={Percent}
+                          type="number"
+                          placeholder="0"
+                          value={projectedInflationUSD}
+                          onChange={(e) => setProjectedInflationUSD(e.target.value)}
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          tooltip={
+                            ratesLoading
+                              ? "Cargando datos históricos..."
+                              : `Basado en los últimos 12 meses: ${usdAnnualRate.toFixed(1)}% anual (CPI USA).`
+                          }
+                        />
+                        <InputWithIcon
+                          label="Devaluación anual proyectada (ARS/USD)"
+                          icon={TrendingDown}
+                          type="number"
+                          placeholder="0"
+                          value={projectedDevaluation}
+                          onChange={(e) => setProjectedDevaluation(e.target.value)}
+                          step="0.1"
+                          min="0"
+                          max="1000"
+                          tooltip={
+                            ratesLoading
+                              ? "Cargando datos históricos..."
+                              : `Basado en dólar blue últimos 12 meses: ${devaluationRate.toFixed(1)}% anual.`
+                          }
+                        />
+                      </>
+                    )}
+                  </div>
+
+                  {!ratesLoading && currencyAnnualRate === 0 && (
+                    <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                      No hay suficientes datos históricos. Ingresá manualmente la tasa de inflación esperada.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -501,56 +724,165 @@ export function CompoundInterestCalculator() {
             </Card>
           )}
 
-          {/* Inflation Comparison */}
-          {result.beatsInflation !== undefined && result.inflationAdjustedAmount && (
-            <Card className={result.beatsInflation ? "border-green-500/50 bg-green-500/5" : "border-red-500/50 bg-red-500/5"}>
+          {/* Inflation Comparison Results */}
+          {result.inflationComparison && (
+            <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  {result.beatsInflation ? "✅" : "⚠️"} Comparación con Inflación
+                  Análisis de Poder Adquisitivo Real
+                  <InfoTooltip content="Compara tu ganancia nominal con la inflación proyectada para saber si realmente ganás poder de compra." />
                 </CardTitle>
+                <CardDescription>
+                  Proyección a {result.years} año{result.years !== 1 ? "s" : ""} usando inflación anual del{" "}
+                  {result.inflationComparison.localInflationRate.toFixed(1)}%
+                  {result.currency === "ARS" ? " (ARS)" : " (USD)"}
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Total Final</p>
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                      {formatCurrency(result.totalAmount, result.currency)}
-                    </p>
+              <CardContent className="space-y-6">
+                {/* Nominal vs Real (local currency) */}
+                <div
+                  className={`rounded-lg border p-4 ${
+                    result.inflationComparison.beatsInflationLocal
+                      ? "border-green-500/50 bg-green-500/5"
+                      : "border-red-500/50 bg-red-500/5"
+                  }`}
+                >
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    {result.inflationComparison.beatsInflationLocal ? "✅" : "⚠️"}
+                    En {result.currency === "ARS" ? "pesos (ARS)" : "dólares (USD)"}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Valor nominal final</p>
+                      <p className="text-xl font-bold">
+                        {formatCurrency(result.totalAmount, result.currency)}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Valor real (hoy)</p>
+                      <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
+                        {formatCurrency(
+                          result.inflationComparison.realValueLocal,
+                          result.currency
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">Poder adquisitivo</p>
+                      <p
+                        className={`text-xl font-bold ${
+                          result.inflationComparison.beatsInflationLocal
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {result.inflationComparison.realGainLocal > 0 ? "+" : ""}
+                        {result.inflationComparison.realGainLocal.toFixed(1)}%
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Ajustado por Inflación</p>
-                    <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">
-                      {formatCurrency(result.inflationAdjustedAmount, result.currency)}
-                    </p>
-                  </div>
-
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Ganancia/Pérdida Real</p>
-                    <p className={`text-xl font-bold ${result.beatsInflation ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                      {result.realGain && result.realGain > 0 ? "+" : ""}{result.realGain?.toFixed(2)}%
-                    </p>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t">
-                  <p className="text-sm">
-                    {result.beatsInflation ? (
+                  <p className="text-sm mt-4 text-muted-foreground">
+                    {result.inflationComparison.beatsInflationLocal ? (
                       <>
-                        <strong>¡Excelente!</strong> Tu inversión <strong>SÍ gana contra la inflación</strong>.
-                        Después de ajustar por inflación, tendrás un <strong>{result.realGain?.toFixed(2)}%</strong> más
-                        de poder adquisitivo real. Esto significa que podrás comprar más cosas que si solo hubieras guardado el dinero.
+                        Tu inversión <strong>supera la inflación</strong> en{" "}
+                        {result.currency === "ARS" ? "pesos" : "dólares"}. Ganás poder de compra real.
                       </>
                     ) : (
                       <>
-                        <strong>Atención:</strong> Tu inversión <strong>NO gana contra la inflación</strong>.
-                        Aunque ganarás {formatCurrency(result.totalInterest, result.currency)} en intereses,
-                        la inflación erosionará tu poder adquisitivo en un <strong>{Math.abs(result.realGain || 0).toFixed(2)}%</strong>.
-                        Considera buscar inversiones con mayor rendimiento.
+                        Tu inversión <strong>no supera la inflación</strong>. Aunque el monto nominal crece,
+                        perdés aproximadamente{" "}
+                        <strong>
+                          {Math.abs(result.inflationComparison.realGainLocal).toFixed(1)}%
+                        </strong>{" "}
+                        de poder adquisitivo.
                       </>
                     )}
                   </p>
                 </div>
+
+                {/* USD-adjusted comparison (ARS only) */}
+                {result.inflationComparison.mode === "usd-adjusted" &&
+                  result.inflationComparison.realValueUSD !== undefined && (
+                    <div
+                      className={`rounded-lg border p-4 ${
+                        result.inflationComparison.beatsInflationUSD
+                          ? "border-green-500/50 bg-green-500/5"
+                          : "border-red-500/50 bg-red-500/5"
+                      }`}
+                    >
+                      <h3 className="font-semibold mb-3 flex items-center gap-2">
+                        {result.inflationComparison.beatsInflationUSD ? "✅" : "⚠️"}
+                        En dólares (poder adquisitivo global)
+                        <InfoTooltip content="Convierte tu inversión a USD usando la devaluación proyectada del peso, y ajusta por inflación del dólar. Útil para ver si preservás valor frente al dólar." />
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Capital en USD (hoy)</p>
+                          <p className="text-lg font-bold">
+                            US${" "}
+                            {result.inflationComparison.equivalentInitialUSD?.toLocaleString(
+                              "es-AR",
+                              { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                            )}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Valor en USD (futuro)</p>
+                          <p className="text-lg font-bold">
+                            US${" "}
+                            {result.inflationComparison.finalUSD?.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Valor real USD (hoy)</p>
+                          <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                            US${" "}
+                            {result.inflationComparison.realValueUSD.toLocaleString("es-AR", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Poder adquisitivo USD</p>
+                          <p
+                            className={`text-lg font-bold ${
+                              result.inflationComparison.beatsInflationUSD
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-red-600 dark:text-red-400"
+                            }`}
+                          >
+                            {(result.inflationComparison.realGainUSD ?? 0) > 0 ? "+" : ""}
+                            {result.inflationComparison.realGainUSD?.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm mt-4 text-muted-foreground">
+                        Tasas usadas: devaluación{" "}
+                        {result.inflationComparison.devaluationRate?.toFixed(1)}% anual, inflación USD{" "}
+                        {result.inflationComparison.usdInflationRate?.toFixed(1)}% anual. Tipo de cambio
+                        actual (blue): ${" "}
+                        {result.inflationComparison.exchangeRateToday?.toLocaleString("es-AR")} ARS/USD.
+                      </p>
+                      <p className="text-sm mt-2">
+                        {result.inflationComparison.beatsInflationUSD ? (
+                          <>
+                            Tu inversión <strong>preserva valor en dólares</strong>. Incluso considerando
+                            devaluación e inflación del dólar, ganás poder adquisitivo internacional.
+                          </>
+                        ) : (
+                          <>
+                            Tu inversión <strong>no preserva valor en dólares</strong>. Aunque crezca en
+                            pesos, al convertir y ajustar por inflación USD perdés poder adquisitivo global.
+                            Considerá activos dolarizados o inversiones con mayor rendimiento real.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  )}
               </CardContent>
             </Card>
           )}
